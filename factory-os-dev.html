@@ -1,0 +1,2581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FactoryOS [DEV]</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyDRLv1Qt8omEwd2kSVRuvVYryaZk-Wy-7U",
+    authDomain: "pew-production-dev.firebaseapp.com",
+    projectId: "pew-production-dev",
+    storageBucket: "pew-production-dev.firebasestorage.app",
+    messagingSenderId: "844922053972",
+    appId: "1:844922053972:web:87337a6b2d421fde74d4c1"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const COL = "factoryos";
+  window.fbStorage = {
+    async get(key) {
+      try { const s = await getDoc(doc(db,COL,key)); return s.exists() ? s.data().value : null; } catch(e) { return null; }
+    },
+    async set(key, value) {
+      try { await setDoc(doc(db,COL,key), {value, updatedAt: Date.now()}); return true; } catch(e) { return false; }
+    },
+    subscribe(key, cb) {
+      return onSnapshot(doc(db,COL,key), s => cb(s.exists() ? s.data().value : null), e => console.error(e));
+    }
+  };
+  window.__firebaseReady = true;
+  window.dispatchEvent(new Event("firebase-ready"));
+</script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Barlow:wght@300;400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0c0e13}
+#root{
+  --bg:#0c0e13;--bg2:#111318;--bg3:#181b23;--bg4:#1f2330;--bg5:#252a38;
+  --border:#252a38;--border2:#2e3445;
+  --accent:#00c8f0;--accent2:#ff5e2c;--accent3:#00d977;
+  --day:#f0a500;--night:#7c82e0;--manual:#00d977;
+  --warn:#f0a500;--danger:#ff3a3a;
+  --text:#dde2ef;--text2:#7d849a;--text3:#454b60;
+  --font:'Barlow',sans-serif;--mono:'IBM Plex Mono',monospace;
+  --r:7px;--r2:10px;
+  font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);min-height:100vh;
+}
+#root ::-webkit-scrollbar{width:4px;height:4px}
+#root ::-webkit-scrollbar-track{background:transparent}
+#root ::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+.overlay{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;z-index:200;padding:1rem}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:1.5rem;max-width:500px;width:100%;max-height:90vh;overflow-y:auto}
+.modal.wide{max-width:580px}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between}
+.modal-close{cursor:pointer;color:var(--text3);font-size:22px;border:none;background:none;line-height:1;padding:0 4px;flex-shrink:0}
+.modal-close:hover{color:var(--text)}
+.modal-note{font-size:11px;color:var(--text2);margin-bottom:.875rem;line-height:1.6}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:6px;font-family:var(--mono)}
+.field input,.field select,.field textarea,.mi{width:100%;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--r);padding:9px 12px;color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border .15s}
+.mi{padding:6px 9px;font-size:11px}
+.field input:focus,.field select:focus,.field textarea:focus,.mi:focus{border-color:var(--accent)}
+.mi:disabled,.field select:disabled{opacity:.55;cursor:not-allowed}
+.mi-row{display:flex;gap:6px}
+.add-btn{flex:1;background:var(--accent2);border:none;border-radius:var(--r);padding:8px;color:#fff;font-family:var(--mono);font-size:10px;cursor:pointer;letter-spacing:.06em;text-align:center;transition:opacity .15s}
+.add-btn:hover{opacity:.85}
+.can-btn{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--r);padding:8px 14px;color:var(--text2);font-family:var(--mono);font-size:10px;cursor:pointer}
+.save-msg{font-size:11px;color:var(--accent3);font-family:var(--mono);margin-top:.5rem}
+.role-chips{display:flex;gap:7px;flex-wrap:wrap}
+.role-chip{flex:1;min-width:80px;background:var(--bg4);border:1px solid var(--border2);border-radius:var(--r);padding:8px;cursor:pointer;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text2);transition:all .15s}
+.role-chip.active{background:#00c8f015;border-color:var(--accent);color:var(--accent)}
+.small-btn{font-size:10px;padding:4px 8px;border-radius:var(--r);border:1px solid var(--border2);background:var(--bg4);color:var(--text2);cursor:pointer;font-family:var(--mono);transition:all .15s}
+.small-btn:hover{color:var(--text);border-color:var(--text2)}
+.small-btn.danger{color:var(--danger);border-color:#ff3a3a30}
+.error-msg{font-size:11px;color:var(--danger);font-family:var(--mono);margin-bottom:8px}
+.login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
+.login-wrap{display:grid;grid-template-columns:1fr 1fr;border-radius:14px;overflow:hidden;border:1px solid var(--border2);max-width:780px;width:100%}
+@media(max-width:720px){.login-wrap{grid-template-columns:1fr}}
+.login-left{background:var(--bg2);padding:2.5rem}
+.login-right{background:var(--bg3);padding:2.5rem;border-left:1px solid var(--border2)}
+@media(max-width:720px){.login-right{border-left:none;border-top:1px solid var(--border2)}}
+.login-logo{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--accent);margin-bottom:2rem;display:flex;align-items:center;gap:8px}
+.login-logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+.login-left h2{font-size:26px;font-weight:500;margin-bottom:.25rem}
+.login-left p{color:var(--text2);font-size:13px;margin-bottom:2rem;line-height:1.6}
+.login-btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:var(--r);padding:11px;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;margin-top:.75rem;transition:opacity .15s}
+.login-btn:hover{opacity:.85}
+.login-error{background:#ff3a3a15;border:1px solid #ff3a3a30;color:var(--danger);border-radius:var(--r);padding:8px 12px;font-size:12px;margin-bottom:1rem;font-family:var(--mono)}
+.sch-row{display:flex;align-items:flex-start;gap:12px;padding:10px;border-radius:var(--r);margin-bottom:8px;border:1px solid var(--border2)}
+.sch-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.sch-name{font-size:13px;font-weight:500;margin-bottom:2px}
+.sch-time{font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:3px}
+.sch-machines{font-size:11px;color:var(--text3);line-height:1.5}
+.schedule-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text2);margin-bottom:1rem}
+.dashboard{display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border2);padding:0 1.25rem;height:50px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:1rem;position:sticky;top:0;z-index:100}
+@media(max-width:760px){.topbar{height:auto;padding:.5rem .75rem;flex-direction:column;align-items:stretch;gap:.5rem}}
+.logo-mark{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--accent);display:flex;align-items:center;gap:7px;white-space:nowrap}
+.logo-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 7px var(--accent)}
+.shift-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto}
+.st-group{display:flex;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:3px;gap:2px;flex-shrink:0}
+.st-tab{padding:4px 13px;border-radius:5px;cursor:pointer;font-size:11px;color:var(--text2);font-family:var(--mono);display:flex;align-items:center;gap:5px;white-space:nowrap;border:none;background:none;transition:all .15s}
+.st-tab .dot{width:5px;height:5px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:all .15s}
+.st-tab.active{background:var(--bg5);color:var(--text)}
+.st-tab.t-day.active .dot{background:var(--day);box-shadow:0 0 5px var(--day)}
+.st-tab.t-night.active .dot{background:var(--night);box-shadow:0 0 5px var(--night)}
+.st-tab.t-manual.active .dot{background:var(--manual);box-shadow:0 0 5px var(--manual)}
+.st-divider{width:1px;background:var(--border2);height:18px;margin:0 2px;flex-shrink:0}
+.topbar-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.live-clock{font-family:var(--mono);font-size:12px;color:var(--text2);letter-spacing:.05em}
+.icon-btn{font-size:11px;color:var(--text3);cursor:pointer;padding:4px 9px;border-radius:var(--r);border:1px solid var(--border2);font-family:var(--mono);background:none;white-space:nowrap;transition:all .15s}
+.icon-btn:hover{color:var(--text);border-color:var(--text2)}
+.user-badge{display:flex;align-items:center;gap:7px;font-size:12px;border:none;background:none;color:var(--text)}
+.user-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#000;flex-shrink:0}
+.shift-banner{padding:5px 1.25rem;font-size:11px;font-family:var(--mono);display:flex;align-items:center;gap:1rem;border-bottom:1px solid var(--border2);flex-shrink:0;flex-wrap:wrap}
+.sb-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sb-status{margin-left:auto;font-size:10px;padding:2px 8px;border-radius:3px;background:var(--bg4);letter-spacing:.08em}
+.main-layout{display:grid;grid-template-columns:1fr 280px;flex:1}
+@media(max-width:900px){.main-layout{grid-template-columns:1fr}}
+.content-area{padding:1.125rem;display:flex;flex-direction:column;gap:1.125rem}
+@media(max-width:760px){.content-area{padding:.75rem}}
+.sidebar{background:var(--bg2);border-left:1px solid var(--border2);padding:1.125rem;display:flex;flex-direction:column;gap:1.125rem}
+@media(max-width:900px){.sidebar{border-left:none;border-top:1px solid var(--border2)}}
+@media(max-width:760px){.sidebar{padding:.75rem}}
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media(max-width:600px){.stats-row{grid-template-columns:repeat(2,1fr)}}
+.stat-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:.875rem 1rem;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.s-run::before{background:var(--accent3)}.s-idle::before{background:var(--warn)}.s-down::before{background:var(--danger)}.s-eff::before{background:var(--accent)}
+.stat-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:5px;font-family:var(--mono)}
+.stat-val{font-size:26px;font-weight:300;font-family:var(--mono);line-height:1}
+.stat-sub{font-size:10px;color:var(--text3);margin-top:4px}
+.c-green{color:var(--accent3)}.c-amber{color:var(--warn)}.c-red{color:var(--danger)}.c-blue{color:var(--accent)}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;flex-wrap:wrap;gap:6px}
+.sec-title{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text2);font-family:var(--mono)}
+.filter-row{display:flex;gap:4px;flex-wrap:wrap}
+.fbtn{padding:3px 9px;border-radius:4px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:10px;cursor:pointer;font-family:var(--mono);transition:all .15s}
+.fbtn.active{background:var(--bg5);color:var(--text)}
+.machine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:7px}
+@media(max-width:760px){.machine-grid{grid-template-columns:repeat(2,1fr);gap:8px}}
+.m-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:9px;cursor:pointer;transition:border-color .2s,transform .15s;position:relative;overflow:hidden}
+.m-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:2px}
+.m-card.running::after{background:var(--accent3)}.m-card.idle::after{background:var(--warn)}.m-card.breakdown::after{background:var(--danger)}
+.m-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.m-card.selected{border-color:var(--accent);background:#00c8f00a}
+.m-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.m-id{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.m-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.running .m-dot{background:var(--accent3);box-shadow:0 0 5px var(--accent3)}
+.idle .m-dot{background:var(--warn)}
+.breakdown .m-dot{background:var(--danger);box-shadow:0 0 5px var(--danger);animation:blink 1.3s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.m-name{font-size:11px;font-weight:600;margin-bottom:3px;line-height:1.3}
+.m-badge{font-size:9px;font-family:var(--mono);padding:1px 5px;border-radius:3px;display:inline-block;margin-bottom:5px;letter-spacing:.04em}
+.m-job{font-size:10px;color:var(--accent);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:13px;margin-bottom:4px}
+.m-op{font-size:9px;color:var(--text2);font-family:var(--mono);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-prog-bg{background:var(--bg5);border-radius:2px;height:3px;overflow:hidden}
+.m-prog-fill{height:100%;border-radius:2px;transition:width .6s}
+.running .m-prog-fill{background:var(--accent3)}.idle .m-prog-fill{background:var(--warn)}.breakdown .m-prog-fill{background:var(--danger)}
+.m-units{font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:3px;text-align:right}
+.shift-done-tag{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:10px;background:var(--bg5);color:var(--text2);display:inline-block;margin-top:4px}
+.shift-done-tag.ok{background:#00d97720;color:var(--accent3)}
+.shift-done-tag.low{background:#ff3a3a20;color:var(--danger)}
+.ob-wrap{display:flex;flex-direction:column;gap:5px}
+.ob-row{display:flex;align-items:center;gap:8px}
+.ob-label{font-size:10px;font-family:var(--mono);color:var(--text2);width:72px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ob-track{flex:1;height:11px;background:var(--bg4);border-radius:2px;overflow:hidden;position:relative}
+.ob-fill{height:100%;border-radius:2px;transition:width .6s}
+.ob-target{position:absolute;top:0;bottom:0;width:1px;background:#ffffff20}
+.ob-pct{font-size:9px;font-family:var(--mono);color:var(--text3);width:30px;text-align:right;flex-shrink:0}
+.shift-compare{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);overflow:hidden}
+.sc-hdr{display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;padding:6px 10px;background:var(--bg4);font-size:9px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text3);align-items:center}
+.sc-row{display:grid;grid-template-columns:10px 1fr auto auto;gap:8px;padding:8px 10px;border-top:1px solid var(--border);align-items:center;cursor:pointer;border-left:none;border-right:none;border-bottom:none;background:none;width:100%;color:var(--text);text-align:left;transition:background .15s}
+.sc-row:hover{background:var(--bg4)}
+.sc-row.active-view{background:var(--bg5)}
+.sc-dot{width:8px;height:8px;border-radius:50%}
+.sc-name{font-size:12px;font-weight:500}
+.sc-time{font-size:10px;font-family:var(--mono);color:var(--text2);white-space:nowrap}
+.sc-count{font-size:11px;font-family:var(--mono);color:var(--text2);text-align:right}
+.sb-sec{display:flex;flex-direction:column}
+.sb-title{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text2);font-family:var(--mono);margin-bottom:.625rem}
+.m-detail{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:.875rem}
+.md-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.md-id{font-size:15px;font-weight:600;font-family:var(--mono)}
+.md-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px}
+.md-row:last-child{border-bottom:none}
+.md-k{color:var(--text2)}.md-v{font-family:var(--mono);font-weight:500;text-align:right;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.md-actions{display:flex;gap:6px;margin-top:.75rem;flex-wrap:wrap}
+.md-btn{flex:1;min-width:80px;padding:7px;border-radius:var(--r);font-family:var(--mono);font-size:10px;cursor:pointer;border:1px solid var(--border2);background:var(--bg4);color:var(--text2);letter-spacing:.05em;text-align:center;transition:all .15s}
+.md-btn:hover{color:var(--text);border-color:var(--text2)}
+.md-btn.primary{background:var(--accent3);color:#000;border-color:transparent}
+.md-btn.danger{background:#ff3a3a15;color:var(--danger);border-color:#ff3a3a25}
+.pill{font-size:10px;padding:2px 8px;border-radius:10px;font-family:var(--mono)}
+.p-run{background:#00d97720;color:var(--accent3)}.p-idle{background:#f0a50020;color:var(--warn)}.p-down{background:#ff3a3a20;color:var(--danger)}
+.prod-entry{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:.875rem;margin-top:.75rem}
+.prod-entry-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);font-family:var(--mono);margin-bottom:.625rem}
+.prod-vs{font-size:11px;font-family:var(--mono);color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between}
+.prod-vs b{color:var(--text)}
+.complete-btn{width:100%;background:var(--accent3);border:none;border-radius:var(--r);padding:9px;color:#000;font-family:var(--mono);font-size:11px;font-weight:500;cursor:pointer;letter-spacing:.06em;transition:opacity .15s}
+.complete-btn:hover{opacity:.85}
+.alert-list{display:flex;flex-direction:column;gap:5px;max-height:360px;overflow-y:auto}
+.al-item{background:var(--bg3);border-left:2px solid var(--danger);border-radius:0 var(--r) var(--r) 0;padding:7px 9px;display:flex;align-items:flex-start;justify-content:space-between;gap:6px}
+.al-item.warn{border-color:var(--warn)}.al-item.info{border-color:var(--accent)}.al-item.shortfall{border-color:var(--danger);background:#ff3a3a08;flex-direction:column}
+.al-msg{font-size:11px;font-weight:500;flex:1}.al-time{font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:1px;white-space:nowrap}
+.al-dismiss{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:0 2px;flex-shrink:0}
+.al-dismiss:hover{color:var(--text)}
+.empty{color:var(--text3);font-size:11px;text-align:center;padding:.875rem 0}
+.row-between{display:flex;align-items:center;justify-content:space-between}
+.user-row{display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border2);border-radius:var(--r);margin-bottom:6px;background:var(--bg3)}
+.user-row-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#000;flex-shrink:0}
+.user-row-info{flex:1;min-width:0}
+.user-row-name{font-size:12px;font-weight:500}
+.user-row-meta{font-size:10px;color:var(--text2);font-family:var(--mono)}
+.user-row-actions{display:flex;gap:4px;flex-shrink:0}
+.pj-list{display:flex;flex-direction:column;gap:6px}
+.pipe-node{margin-bottom:0}
+.pipe-raw{background:var(--bg4);border:1px solid var(--border2);border-radius:var(--r);padding:8px 10px}
+.pipe-arrow{display:flex;align-items:center;justify-content:center;padding:3px 0;color:var(--text3);font-size:10px;font-family:var(--mono)}
+.pipe-arrow.pipe-arrow-end{color:var(--accent3)}
+.pj-row{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:8px 10px;display:flex;align-items:center;gap:8px}
+.pj-info{flex:1;min-width:0}
+.pj-name{font-size:12px;font-weight:500}
+.pj-meta{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.pj-target{font-size:11px;font-family:var(--mono);color:var(--text2);white-space:nowrap}
+.pj-actions{display:flex;gap:4px;flex-shrink:0}
+.info-box{border-radius:var(--r);padding:10px 12px;margin-bottom:1rem;font-size:11px;line-height:1.6}
+.info-box.danger{background:#ff3a3a10;border:1px solid #ff3a3a30}
+.info-box.neutral{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono)}
+.info-box.success{background:#00d97710;border:1px solid #00d97730;color:var(--accent3)}
+.insp-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;margin-bottom:1rem}
+.insp-table th,.insp-table td{border:1px solid var(--border2);padding:0;text-align:center}
+.insp-table th{background:var(--bg4);color:var(--text2);font-weight:500;letter-spacing:.04em;padding:7px 6px;font-size:10px;text-transform:uppercase}
+.insp-table td.sr{color:var(--text3);padding:6px;font-size:11px;width:40px}
+.insp-table td input{width:100%;height:100%;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:11px;text-align:center;padding:7px 4px}
+.insp-table td input:focus{background:var(--bg4)}
+.insp-table tbody tr:nth-child(even){background:var(--bg3)}
+.dev-banner{position:sticky;top:0;left:0;right:0;z-index:300;background:repeating-linear-gradient(45deg,#ff5e2c,#ff5e2c 10px,#1a0a02 10px,#1a0a02 20px);color:#fff;text-align:center;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.12em;padding:4px 0;text-shadow:0 1px 2px #000}
+.loading-spin{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:1rem;font-family:var(--mono);font-size:12px;color:var(--text2)}
+.loading-hint{font-size:11px;color:var(--text3);max-width:400px;line-height:1.7;text-align:center;padding:0 1rem}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useRef } = React;
+
+const MACHINES_SEED = [
+  {id:'CNC-1',name:'CNC 1',type:'cnc',shift:'cnc_vmc'},
+  {id:'CNC-2',name:'CNC 2',type:'cnc',shift:'cnc_vmc'},
+  {id:'CNC-3',name:'CNC 3',type:'cnc',shift:'cnc_vmc'},
+  {id:'VMC-1',name:'VMC 1',type:'vmc',shift:'cnc_vmc'},
+  {id:'VMC-2',name:'VMC 2',type:'vmc',shift:'cnc_vmc'},
+  {id:'MIL-1',name:'Milling M/C 1',type:'milling',shift:'manual'},
+  {id:'MIL-2',name:'Milling M/C 2',type:'milling',shift:'manual'},
+  {id:'MIL-3',name:'Milling M/C 3',type:'milling',shift:'manual'},
+  {id:'DRL-1',name:'Drilling M/C 1',type:'drilling',shift:'manual'},
+  {id:'DRL-2',name:'Drilling M/C 2',type:'drilling',shift:'manual'},
+  {id:'DRL-3',name:'Drilling M/C 3',type:'drilling',shift:'manual'},
+  {id:'DRL-4',name:'Drilling M/C 4',type:'drilling',shift:'manual'},
+  {id:'DRL-5',name:'Drilling M/C 5',type:'drilling',shift:'manual'},
+  {id:'DRL-6',name:'Drilling M/C 6',type:'drilling',shift:'manual'},
+  {id:'DRL-7',name:'Drilling M/C 7',type:'drilling',shift:'manual'},
+  {id:'DRL-8',name:'Drilling M/C 8',type:'drilling',shift:'manual'},
+  {id:'LTH-1',name:'Lathe 1',type:'lathe',shift:'manual'},
+  {id:'LTH-2',name:'Lathe 2',type:'lathe',shift:'manual'},
+  {id:'LTH-3',name:'Lathe 3',type:'lathe',shift:'manual'},
+  {id:'LTH-4',name:'Lathe 4',type:'lathe',shift:'manual'},
+  {id:'ASM-1',name:'Assembly 1',type:'assembly',shift:'manual'},
+  {id:'ASM-2',name:'Assembly 2',type:'assembly',shift:'manual'},
+  {id:'DCK-1',name:'Dock Chuck',type:'dockchuck',shift:'manual'},
+];
+
+const SHIFT_CFG = {
+  day:   {label:'CNC / VMC — Day Shift',  time:'08:00 – 19:00',color:'#f0a500',shiftKey:'cnc_vmc',check:h=>h>=8&&h<19},
+  night: {label:'CNC / VMC — Night Shift',time:'20:00 – 07:00',color:'#7c82e0',shiftKey:'cnc_vmc',check:h=>h>=20||h<7},
+  manual:{label:'Manual / Labour Shift',  time:'09:00 – 17:00',color:'#00d977',shiftKey:'manual', check:h=>h>=9&&h<17},
+};
+
+const BADGE = {
+  cnc:      {color:'#00c8f0',bg:'#00c8f015',lbl:'CNC'},
+  vmc:      {color:'#7c82e0',bg:'#7c82e015',lbl:'VMC'},
+  milling:  {color:'#e06cf0',bg:'#e06cf015',lbl:'MILLING'},
+  drilling: {color:'#f0c840',bg:'#f0c84015',lbl:'DRILLING'},
+  lathe:    {color:'#40c8a0',bg:'#40c8a015',lbl:'LATHE'},
+  assembly: {color:'#ff5e2c',bg:'#ff5e2c15',lbl:'ASSEMBLY'},
+  dockchuck:{color:'#a0b0ff',bg:'#a0b0ff15',lbl:'DOCK CHUCK'},
+};
+
+const JOB_POOL = ['Shaft Batch #S1','Gear Profile #G4','Cam Cut #C7','Flange Set B','Drill Run #D3','Turn Series T2','Mill Block #M9','Plate Bend P1'];
+const AC = {admin:'#ff5e2c',supervisor:'#00c8f0',operator:'#00d977'};
+
+const DEFAULT_USERS = [
+  {username:'admin',     password:'admin123',name:'Admin',     role:'admin',     shift:'day',    dailyWage:0},
+  {username:'supervisor',password:'super123',name:'Supervisor',role:'supervisor',shift:'day',    dailyWage:0},
+  {username:'operator1', password:'op123',   name:'Operator 1',role:'operator',  shift:'manual', dailyWage:500},
+];
+
+// A casting type is the raw cast-iron piece that arrives pre-cast from the foundry. It defines its
+// own routing: an ordered, variable-length list of stages it must pass through before becoming a
+// finished, sellable unit. Each stage names a MACHINE TYPE (not a specific machine) and carries its
+// own target/rate/shiftHours, same shape as the old per-job fields, used for wage OT calculation.
+const DEFAULT_CASTING_TYPES = [];
+
+const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
+const randEl = a => a[rnd(0,a.length-1)];
+const nowStr = () => { const n=new Date(); return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`; };
+const todayStr = () => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
+const fullTs = () => new Date().toISOString();
+const isActive = s => SHIFT_CFG[s].check(new Date().getHours());
+const initials = name => name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+// WIP key for "pieces ready to start stage N" of a casting type. Stage 1's input is raw stock
+// (handled separately), so WIP keys only exist for stage indices 2..N.
+const wipKey = (castingTypeId,nodeId) => `${castingTypeId}:${nodeId}`;
+const getWip = (wip,castingTypeId,nodeId) => wip[wipKey(castingTypeId,nodeId)] || 0;
+// Flattens a route's steps into every nodeId it touches, regardless of fixed/floating.
+const routeNodeIds = r => (r.steps||[]).flatMap(s=>s.type==='fixed'?[s.nodeId]:(s.nodeIds||[]));
+// Guarantees every casting type has valid nodes[]/routes[] arrays with routes carrying a proper
+// steps[] sequence, regardless of what shape is sitting in Firestore — older test data may have
+// the pre-routing {stages:[...]} format, or routes saved under the earlier flat {nodeIds:[...]}
+// format before fixed/floating steps existed. Migrates flat nodeIds routes into all-fixed steps.
+const normalizeCastingTypes = arr => (Array.isArray(arr)?arr:[]).map(ct=>({
+  ...ct,
+  nodes: Array.isArray(ct.nodes) ? ct.nodes : [],
+  routes: Array.isArray(ct.routes) ? ct.routes.map(r=>{
+    if(Array.isArray(r.steps)) return {...r,steps:r.steps.map(s=>s.type==='fixed'?{...s}:{type:'floating',nodeIds:Array.isArray(s.nodeIds)?s.nodeIds:[]})};
+    if(Array.isArray(r.nodeIds)) return {...r,steps:r.nodeIds.map(nodeId=>({type:'fixed',nodeId}))};
+    return {...r,steps:[]};
+  }) : [],
+}));
+// Resolves a machine's assigned casting type + the specific route + node it's running, given
+// castingTypeId/routeId/nodeId on the machine's shift slot. nodeId is the source of truth for WIP;
+// routeId only matters for knowing what comes before/after this node along the chosen path.
+const resolveStage = (castingTypes,m) => {
+  const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
+  if(!ct||!Array.isArray(ct.nodes)||!Array.isArray(ct.routes)) return {ct:ct||null,stage:null,route:null};
+  const node=m.nodeId!=null?ct.nodes.find(n=>Number(n.nodeId)===Number(m.nodeId)):null;
+  const route=m.routeId!=null?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
+  return {ct,stage:node,route};
+};
+// OT pay for a shift: only when produced exceeds target, converted via the stage's units/hour rate,
+// paid at the operator's plain hourly rate (dailyWage/8) with no multiplier.
+const calcOtPay = (produced,target,ratePerHour,dailyWage)=>{
+  const extra=produced-target;
+  if(extra<=0||!ratePerHour||!dailyWage) return {otHours:0,otPay:0};
+  const otHours=extra/ratePerHour;
+  const hourlyRate=dailyWage/8;
+  return {otHours:Math.round(otHours*100)/100, otPay:Math.round(otHours*hourlyRate*100)/100};
+};
+
+
+function defaultSlot(){
+  return {status:'idle',job:null,progress:0,output:0,operator:null,assignedOperator:null,
+    castingTypeId:null,routeId:null,nodeId:null,prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
+    setupApplied:false,setupHoursUsed:0,adjustedTarget:null,settingApproved:false,lineInspection:null,
+    settingApprovalStatus:null,settingRejectionNote:null};
+}
+// Returns the assignment slot for a given shiftKey ('day'|'night') on a cnc_vmc machine.
+// Falls back to migrating pre-existing flat fields into the 'day' slot for machines saved before
+// the day/night split existed, so no in-progress assignment is lost.
+function getSlot(m,shiftKey){
+  if(m.shift!=='cnc_vmc') return null;
+  if(m.shifts&&m.shifts[shiftKey]) return m.shifts[shiftKey];
+  if(shiftKey==='day'&&!m.shifts){
+    return {
+      status:m.status??'idle',job:m.job??null,progress:m.progress??0,output:m.output??0,
+      operator:m.operator??null,assignedOperator:m.assignedOperator??null,
+      castingTypeId:m.castingTypeId??null,routeId:m.routeId??null,nodeId:m.nodeId??null,prodCount:m.prodCount??0,newPieces:m.newPieces??0,reworkPieces:m.reworkPieces??0,
+      castingDefects:m.castingDefects??0,machiningDefects:m.machiningDefects??0,
+      shiftComplete:m.shiftComplete??false,setupApplied:m.setupApplied??false,setupHoursUsed:m.setupHoursUsed??0,
+      adjustedTarget:m.adjustedTarget??null,settingApproved:m.settingApproved??false,lineInspection:m.lineInspection??null,
+      settingApprovalStatus:m.settingApprovalStatus??null,settingRejectionNote:m.settingRejectionNote??null
+    };
+  }
+  return defaultSlot();
+}
+// Merges a machine's base info with one shift's assignment slot, for display/read purposes.
+function withShift(m,shiftKey){
+  if(m.shift!=='cnc_vmc') return m;
+  return {...m,...getSlot(m,shiftKey)};
+}
+// Immutably patches one machine's shift slot (or the flat machine for non-cnc_vmc machines).
+function patchMachineShift(machines,machineId,shiftKey,patch){
+  return machines.map(m=>{
+    if(m.id!==machineId) return m;
+    if(m.shift!=='cnc_vmc') return {...m,...patch};
+    const current=getSlot(m,shiftKey);
+    return {...m,shifts:{...(m.shifts||{}),[shiftKey]:{...current,...patch}}};
+  });
+}
+
+function initMachines() {
+  return MACHINES_SEED.map(def => {
+    if(def.shift==='cnc_vmc'){
+      return {...def, target: rnd(60,150), shifts:{day:defaultSlot(),night:defaultSlot()}};
+    }
+    const r = Math.random();
+    const status = r<0.55?'running':r<0.78?'idle':'breakdown';
+    return {
+      ...def, status,
+      job: status==='running'?randEl(JOB_POOL):null,
+      progress: status==='running'?rnd(10,85):0,
+      target: rnd(60,150),
+      output: status==='running'?rnd(25,120):rnd(0,15),
+      operator: `OP-${rnd(1,10)}`,
+      castingTypeId:null, routeId:null, nodeId:null,
+      prodCount:0, newPieces:0, reworkPieces:0, castingDefects:0, machiningDefects:0,
+      shiftComplete:false, assignedOperator:null,
+      setupApplied:false, setupHoursUsed:0, adjustedTarget:null,
+    };
+  });
+}
+
+const fb = {
+  get: k => window.fbStorage.get(k),
+  set: (k,v) => window.fbStorage.set(k,v),
+  sub: (k,cb) => window.fbStorage.subscribe(k,cb),
+};
+
+// ── Modal ──────────────────────────────────────────────────
+function Modal({onClose,title,children,wide}) {
+  return (
+    <div className="overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className={`modal${wide?' wide':''}`} onMouseDown={e=>e.stopPropagation()}>
+        <h3>{title}<button className="modal-close" onClick={onClose}>×</button></h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Login ──────────────────────────────────────────────────
+function LoginScreen({users,onLogin}) {
+  const [u,setU]=useState('');
+  const [p,setP]=useState('');
+  const [shift,setShift]=useState('day');
+  const [err,setErr]=useState('');
+  useEffect(()=>{
+    const found=users.find(x=>x.username.toLowerCase()===u.trim().toLowerCase());
+    if(found) setShift(found.shift||'day');
+  },[u,users]);
+  const login=()=>{
+    setErr('');
+    const found=users.find(x=>x.username.toLowerCase()===u.trim().toLowerCase());
+    if(!found) return setErr('No account found.');
+    if(found.password!==p) return setErr('Incorrect password.');
+    onLogin({...found,shift});
+  };
+  return (
+    <div className="login-screen">
+      <div className="login-wrap">
+        <div className="login-left">
+          <div className="login-logo"><div className="login-logo-dot"></div>FactoryOS v3.2 — DEV BUILD</div>
+          <h2>Sign in</h2>
+          <p>Each worker has their own username and password. Contact your admin if you don't have one.</p>
+          {err&&<div className="login-error">{err}</div>}
+          <div className="field"><label>Username</label><input type="text" value={u} onChange={e=>setU(e.target.value)} placeholder="e.g. operator1"/></div>
+          <div className="field"><label>Password</label><input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')login();}} placeholder="Password"/></div>
+          <div className="field"><label>Shift today</label>
+            <select value={shift} onChange={e=>setShift(e.target.value)}>
+              <option value="day">CNC/VMC — Day (08:00–19:00)</option>
+              <option value="night">CNC/VMC — Night (20:00–07:00)</option>
+              <option value="manual">Manual/Labour (09:00–17:00)</option>
+            </select>
+          </div>
+          <button className="login-btn" onClick={login}>SIGN IN →</button>
+        </div>
+        <div className="login-right">
+          <div className="schedule-title">Shift schedule</div>
+          {[{c:'#f0a500',n:'CNC/VMC — Day',t:'08:00–19:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
+            {c:'#7c82e0',n:'CNC/VMC — Night',t:'20:00–07:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
+            {c:'#00d977',n:'Manual/Labour — Day',t:'09:00–17:00',m:'Milling×3·Drilling×8·Lathe×4·Assembly×2·Dock Chuck×1'}
+          ].map(s=>(
+            <div className="sch-row" key={s.n}>
+              <div className="sch-dot" style={{background:s.c,boxShadow:`0 0 6px ${s.c}`}}></div>
+              <div><div className="sch-name">{s.n}</div><div className="sch-time">{s.t}</div><div className="sch-machines">{s.m}</div></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── User Modal ─────────────────────────────────────────────
+function UserModal({users,setUsers,currentUser,onClose}) {
+  const [editing,setEditing]=useState(null);
+  const [form,setForm]=useState({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:''});
+  const [msg,setMsg]=useState('');
+  const save=async()=>{
+    if(!form.username.trim()||!form.name.trim()) return setMsg('Username and name required.');
+    const wage=form.dailyWage===''?0:Number(form.dailyWage);
+    if(isNaN(wage)||wage<0) return setMsg('Daily wage must be a number 0 or greater.');
+    let updated;
+    if(editing==='new'){
+      if(users.some(x=>x.username.toLowerCase()===form.username.trim().toLowerCase())) return setMsg('Username exists.');
+      if(!form.password) return setMsg('Password required.');
+      updated=[...users,{...form,username:form.username.trim(),dailyWage:wage}];
+    } else {
+      updated=users.map(x=>x.username!==editing?x:{...x,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,password:form.password||x.password});
+    }
+    setUsers(updated); await fb.set('users',updated); setMsg('Saved.'); setEditing(null);
+  };
+  const remove=async uname=>{
+    if(uname===currentUser.username) return setMsg("Can't delete yourself.");
+    if(!window.confirm(`Remove "${uname}"?`)) return;
+    const updated=users.filter(x=>x.username!==uname);
+    setUsers(updated); await fb.set('users',updated);
+  };
+  return (
+    <Modal onClose={onClose} title="User accounts">
+      {!editing?(
+        <>
+          {users.map(u=>(
+            <div className="user-row" key={u.username}>
+              <div className="user-row-avatar" style={{background:AC[u.role]||'#888'}}>{initials(u.name)}</div>
+              <div className="user-row-info">
+                <div className="user-row-name">{u.name}{u.username===currentUser.username?' (you)':''}</div>
+                <div className="user-row-meta">{u.username} · {u.role}{u.role==='operator'?` · ₹${u.dailyWage||0}/day`:''}</div>
+              </div>
+              <div className="user-row-actions">
+                <button className="small-btn" onClick={()=>{setForm({username:u.username,password:'',name:u.name,role:u.role,shift:u.shift,dailyWage:u.dailyWage??''});setEditing(u.username);setMsg('');}}>Edit</button>
+                <button className="small-btn danger" onClick={()=>remove(u.username)}>Remove</button>
+              </div>
+            </div>
+          ))}
+          <button className="add-btn" style={{marginTop:'.5rem'}} onClick={()=>{setForm({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:''});setEditing('new');setMsg('');}}>+ ADD USER</button>
+          {msg&&<div className="save-msg">{msg}</div>}
+        </>
+      ):(
+        <>
+          <div className="field"><label>Username</label><input className="mi" value={form.username} disabled={editing!=='new'} onChange={e=>setForm({...form,username:e.target.value})} placeholder="e.g. operator2"/></div>
+          <div className="field"><label>Full name</label><input className="mi" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Suresh Patel"/></div>
+          <div className="field"><label>{editing==='new'?'Password':'New password (blank = keep current)'}</label><input className="mi" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div>
+          <div className="field"><label>Role</label>
+            <div className="role-chips">{['admin','supervisor','operator'].map(r=><div key={r} className={`role-chip${form.role===r?' active':''}`} onClick={()=>setForm({...form,role:r})}>{r.charAt(0).toUpperCase()+r.slice(1)}</div>)}</div>
+          </div>
+          <div className="field"><label>Usual shift</label>
+            <select className="mi" value={form.shift} onChange={e=>setForm({...form,shift:e.target.value})}>
+              <option value="day">CNC/VMC — Day</option><option value="night">CNC/VMC — Night</option><option value="manual">Manual/Labour</option>
+            </select>
+          </div>
+          <div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>
+          {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
+          <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={save}>SAVE</button><button className="can-btn" onClick={()=>setEditing(null)}>Cancel</button></div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ── Casting Types Modal ─────────────────────────────────────
+function CastingTypesModal({castingTypes,setCastingTypes,onClose}) {
+  const [editing,setEditing]=useState(null); // casting type id being edited, or 'new'
+  const [form,setForm]=useState({name:'',unit:'pcs',rawBalance:0,lowThreshold:0});
+  const [nodes,setNodes]=useState([]); // working copy of the node pool while editing a casting type
+  const [routes,setRoutes]=useState([]); // working copy of routes (each an ordered list of steps)
+  const [nodeForm,setNodeForm]=useState(null); // {editingId, name, machineType, target, shiftHours}
+  const [routeForm,setRouteForm]=useState(null); // {editingId, name, steps:[{type:'fixed',nodeId}|{type:'floating',nodeIds:[]}]}
+  const [msg,setMsg]=useState('');
+  const dragIdx=useRef(null);
+  const dragOverIdx=useRef(null);
+
+  // Uses the global routeNodeIds helper (flattens fixed+floating steps into all referenced nodeIds).
+  const persist=async updated=>{ setCastingTypes(updated); await fb.set('casting_types',updated); };
+
+  const startNew=()=>{ setForm({name:'',unit:'pcs',rawBalance:0,lowThreshold:0}); setNodes([]); setRoutes([]); setEditing('new'); setMsg(''); };
+  const startEdit=ct=>{
+    setForm({name:ct.name,unit:ct.unit,rawBalance:ct.rawBalance,lowThreshold:ct.lowThreshold});
+    setNodes(ct.nodes.map(n=>({...n})));
+    setRoutes(ct.routes.map(r=>({...r,steps:r.steps.map(s=>s.type==='fixed'?{...s}:{...s,nodeIds:[...s.nodeIds]})})));
+    setEditing(ct.id); setMsg('');
+  };
+
+  const saveType=async()=>{
+    const name=form.name.trim();
+    const balance=Number(form.rawBalance);
+    const low=Number(form.lowThreshold);
+    if(!name) return setMsg('Casting type name is required.');
+    if(isNaN(balance)||balance<0) return setMsg('Starting balance must be 0 or greater.');
+    if(isNaN(low)||low<0) return setMsg('Low-stock threshold must be 0 or greater.');
+    if(!nodes.length) return setMsg('Add at least one operation to use in a route.');
+    if(!routes.length) return setMsg('Add at least one route.');
+    if(routes.some(r=>!r.steps.length)) return setMsg('Every route needs at least one step.');
+    setMsg('Saving…');
+    // Read the latest data straight from Firestore right before merging, rather than trusting the
+    // castingTypes prop — the prop can be a render behind the live snapshot listener, which was
+    // causing newly-added casting types to occasionally get overwritten by a stale merge.
+    const latest=normalizeCastingTypes(await fb.get('casting_types').then(v=>v||castingTypes));
+    const snapshot=[...latest];
+    let updated;
+    if(editing==='new'){
+      const nextId=snapshot.length?Math.max(...snapshot.map(s=>s.id))+1:1;
+      updated=[...snapshot,{id:nextId,name,unit:form.unit,rawBalance:balance,lowThreshold:low,nodes,routes}];
+    } else {
+      updated=snapshot.map(s=>s.id===editing?{...s,name,unit:form.unit,lowThreshold:low,nodes,routes}:s);
+    }
+    const ok=await fb.set('casting_types',updated);
+    setCastingTypes(updated);
+    setEditing(null);
+    setMsg(ok?'':'Saved locally but Firebase sync failed. Check your connection.');
+  };
+
+  const removeType=async id=>{
+    if(!window.confirm('Remove this casting type? Machines assigned to its routes will need a new assignment.')) return;
+    await persist(castingTypes.filter(s=>s.id!==id));
+  };
+
+  const onDragEnd=async()=>{
+    const from=dragIdx.current,to=dragOverIdx.current;
+    if(from===null||to===null||from===to){dragIdx.current=null;dragOverIdx.current=null;return;}
+    const updated=[...castingTypes];
+    const [moved]=updated.splice(from,1);
+    updated.splice(to,0,moved);
+    dragIdx.current=null; dragOverIdx.current=null;
+    await persist(updated);
+  };
+
+  const saveNode=()=>{
+    const name=nodeForm.name.trim();
+    const target=Number(nodeForm.target);
+    const hours=Number(nodeForm.shiftHours);
+    if(!name) return setMsg('Operation name is required.');
+    if(!target||target<=0||isNaN(target)) return setMsg('Target must be a number greater than 0.');
+    if(!hours||hours<=0||isNaN(hours)) return setMsg('Shift hours must be a number greater than 0.');
+    const rate=target/hours;
+    let updatedNodes;
+    if(nodeForm.editingId===null){
+      const nextId=nodes.length?Math.max(...nodes.map(n=>n.nodeId))+1:1;
+      updatedNodes=[...nodes,{nodeId:nextId,name,machineType:nodeForm.machineType,target,ratePerHour:rate,shiftHours:hours}];
+    } else {
+      updatedNodes=nodes.map(n=>n.nodeId===nodeForm.editingId?{...n,name,machineType:nodeForm.machineType,target,ratePerHour:rate,shiftHours:hours}:n);
+    }
+    setNodes(updatedNodes);
+    setNodeForm(null);
+    setMsg('');
+  };
+
+  const removeNode=nodeId=>{
+    const usedIn=routes.filter(r=>routeNodeIds(r).includes(nodeId));
+    if(usedIn.length&&!window.confirm(`This operation is used in ${usedIn.length} route${usedIn.length>1?'s':''}. Removing it will also remove it from those routes. Continue?`)) return;
+    setNodes(nodes.filter(n=>n.nodeId!==nodeId));
+    setRoutes(routes.map(r=>({
+      ...r,
+      steps:r.steps
+        .map(s=>s.type==='fixed'?s:{...s,nodeIds:s.nodeIds.filter(id=>id!==nodeId)})
+        .filter(s=>s.type==='fixed'?s.nodeId!==nodeId:s.nodeIds.length>0)
+    })));
+  };
+
+  const startNewRoute=()=>setRouteForm({editingId:null,name:'',steps:[]});
+  const startEditRoute=r=>setRouteForm({editingId:r.routeId,name:r.name,steps:r.steps.map(s=>s.type==='fixed'?{...s}:{...s,nodeIds:[...s.nodeIds]})});
+
+  const saveRoute=()=>{
+    const name=routeForm.name.trim();
+    if(!name) return setMsg('Route name is required.');
+    if(!routeForm.steps.length) return setMsg('Add at least one step to the route.');
+    const updatedRoute={routeId:routeForm.editingId===null?(routes.length?Math.max(...routes.map(r=>r.routeId))+1:1):routeForm.editingId,name,steps:routeForm.steps};
+    let updatedRoutes;
+    if(routeForm.editingId===null){
+      updatedRoutes=[...routes,updatedRoute];
+    } else {
+      updatedRoutes=routes.map(r=>r.routeId===routeForm.editingId?updatedRoute:r);
+    }
+    setRoutes(updatedRoutes);
+    setRouteForm(null);
+    setMsg('');
+  };
+
+  const removeRoute=routeId=>{
+    if(!window.confirm('Remove this route? Machines currently assigned via this route keep their current node, but cannot be re-assigned through it again.')) return;
+    setRoutes(routes.filter(r=>r.routeId!==routeId));
+  };
+
+  // Adding a step: a fixed node becomes its own step; a floating node either starts a new floating
+  // group (if the last step isn't already a floating group) or joins the existing trailing one.
+  const addFixedStep=nodeId=>setRouteForm({...routeForm,steps:[...routeForm.steps,{type:'fixed',nodeId}]});
+  const addFloatingStep=nodeId=>{
+    const steps=[...routeForm.steps];
+    const last=steps[steps.length-1];
+    if(last&&last.type==='floating'){
+      if(!last.nodeIds.includes(nodeId)) steps[steps.length-1]={...last,nodeIds:[...last.nodeIds,nodeId]};
+    } else {
+      steps.push({type:'floating',nodeIds:[nodeId]});
+    }
+    setRouteForm({...routeForm,steps});
+  };
+  const removeStep=idx=>setRouteForm({...routeForm,steps:routeForm.steps.filter((_,i)=>i!==idx)});
+  const removeNodeFromFloatingStep=(stepIdx,nodeId)=>{
+    const steps=[...routeForm.steps];
+    const step=steps[stepIdx];
+    const updatedIds=step.nodeIds.filter(id=>id!==nodeId);
+    if(updatedIds.length) steps[stepIdx]={...step,nodeIds:updatedIds};
+    else steps.splice(stepIdx,1);
+    setRouteForm({...routeForm,steps});
+  };
+
+  // Which routes reference a given node, used to show "shared" hints in the route builder.
+  const routesUsingNode=nodeId=>routes.filter(r=>routeNodeIds(r).includes(nodeId));
+
+  return (
+    <Modal onClose={onClose} title="Casting types &amp; routing" wide>
+      {!editing?(
+        <>
+          <p className="modal-note">Each casting type arrives pre-cast from the foundry. Define the operations it can pass through, then one or more named routes through those operations — routes that share an operation share its work queue. Drag ⠿ to reorder casting types.</p>
+          <div className="pj-list">
+            {castingTypes.map((ct,i)=>(
+              <div className="pj-row" key={ct.id} draggable
+                onDragStart={()=>{dragIdx.current=i;}}
+                onDragEnter={()=>{dragOverIdx.current=i;}}
+                onDragEnd={onDragEnd}
+                onDragOver={e=>e.preventDefault()}
+                style={{cursor:'grab',userSelect:'none'}}>
+                <div style={{color:'var(--text3)',fontFamily:'var(--mono)',fontSize:14,flexShrink:0}}>⠿</div>
+                <div className="pj-info">
+                  <div className="pj-name">{ct.name}</div>
+                  <div className="pj-meta">{ct.routes.length} route{ct.routes.length!==1?'s':''}: {ct.routes.map(r=>r.name).join(', ')}</div>
+                </div>
+                <div className="pj-target" style={{color:ct.rawBalance<=ct.lowThreshold?'var(--danger)':'var(--text)'}}>{ct.rawBalance} {ct.unit}</div>
+                <div className="pj-actions">
+                  <button className="small-btn" onClick={()=>startEdit(ct)}>Edit</button>
+                  <button className="small-btn danger" onClick={()=>removeType(ct.id)}>Remove</button>
+                </div>
+              </div>
+            ))}
+            {!castingTypes.length&&<div className="empty">No casting types yet</div>}
+          </div>
+          <button className="add-btn" style={{marginTop:'.75rem'}} onClick={startNew}>+ ADD CASTING TYPE</button>
+          {msg&&<div className="save-msg">{msg}</div>}
+        </>
+      ):(
+        <>
+          <div className="field"><label>Casting type name</label><input className="mi" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Shaft Blank"/></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            <div className="field"><label>Unit</label>
+              <select className="mi" value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})}>
+                <option value="pcs">pcs</option><option value="kg">kg</option>
+              </select>
+            </div>
+            <div className="field"><label>{editing==='new'?'Starting raw balance':'Current raw balance'}</label>
+              <input className="mi" type="number" min="0" step="1" value={form.rawBalance} disabled={editing!=='new'} onChange={e=>setForm({...form,rawBalance:e.target.value})}/>
+              {editing!=='new'&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>Use Stock in / movement log to change balance</div>}
+            </div>
+          </div>
+          <div className="field"><label>Low-stock alert threshold</label><input className="mi" type="number" min="0" value={form.lowThreshold} onChange={e=>setForm({...form,lowThreshold:e.target.value})}/></div>
+
+          <div className="field">
+            <label>Operations — the machine steps this casting can pass through</label>
+            <div className="pj-list">
+              {nodes.map(n=>(
+                <div className="pj-row" key={n.nodeId}>
+                  <div className="pj-info">
+                    <div className="pj-name">{n.name}</div>
+                    <div className="pj-meta">{BADGE[n.machineType]?.lbl||n.machineType.toUpperCase()} · {n.ratePerHour.toFixed(1)}/hr{routesUsingNode(n.nodeId).length>1?` · shared by ${routesUsingNode(n.nodeId).length} routes`:''}</div>
+                  </div>
+                  <div className="pj-target">{n.target}/shift</div>
+                  <div className="pj-actions">
+                    <button className="small-btn" onClick={()=>setNodeForm({editingId:n.nodeId,name:n.name,machineType:n.machineType,target:n.target,shiftHours:n.shiftHours})}>Edit</button>
+                    <button className="small-btn danger" onClick={()=>removeNode(n.nodeId)}>Remove</button>
+                  </div>
+                </div>
+              ))}
+              {!nodes.length&&<div className="empty">No operations yet — add at least one</div>}
+            </div>
+            {!nodeForm&&<button className="add-btn" style={{marginTop:8}} onClick={()=>setNodeForm({editingId:null,name:'',machineType:'cnc',target:100,shiftHours:9})}>+ ADD OPERATION</button>}
+          </div>
+
+          {nodeForm&&(
+            <div className="prod-entry">
+              <div className="prod-entry-title">{nodeForm.editingId===null?'New operation':'Edit operation'}</div>
+              <div className="field"><label>Operation name</label><input className="mi" value={nodeForm.name} onChange={e=>setNodeForm({...nodeForm,name:e.target.value})} placeholder="e.g. Rough turn"/></div>
+              <div className="field"><label>Machine type</label>
+                <select className="mi" value={nodeForm.machineType} onChange={e=>setNodeForm({...nodeForm,machineType:e.target.value})}>
+                  {Object.keys(BADGE).map(t=><option key={t} value={t}>{BADGE[t].lbl}</option>)}
+                </select>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div className="field"><label>Full-shift target</label><input className="mi" type="number" min="1" value={nodeForm.target} onChange={e=>setNodeForm({...nodeForm,target:e.target.value})}/></div>
+                <div className="field"><label>Shift hours</label><input className="mi" type="number" min="1" step="0.5" value={nodeForm.shiftHours} onChange={e=>setNodeForm({...nodeForm,shiftHours:e.target.value})}/></div>
+              </div>
+              {nodeForm.target&&nodeForm.shiftHours&&Number(nodeForm.target)>0&&Number(nodeForm.shiftHours)>0&&(
+                <div className="info-box neutral" style={{marginBottom:'1rem'}}>Calculated rate: <b style={{color:'var(--text)'}}>{(Number(nodeForm.target)/Number(nodeForm.shiftHours)).toFixed(2)} units/hour</b></div>
+              )}
+              <div className="mi-row"><button className="add-btn" style={{background:'var(--accent)'}} onClick={saveNode}>SAVE OPERATION</button><button className="can-btn" onClick={()=>setNodeForm(null)}>Cancel</button></div>
+            </div>
+          )}
+
+          <div className="field" style={{marginTop:'1.25rem'}}>
+            <label>Routes — alternative paths through the operations above; routes sharing an operation share its queue</label>
+            {!routeForm?(
+              <>
+                <div className="pj-list">
+                  {routes.map(r=>(
+                    <div className="pj-row" key={r.routeId} style={{alignItems:'flex-start'}}>
+                      <div className="pj-info">
+                        <div className="pj-name">{r.name}</div>
+                        <div className="pj-meta">Raw → {r.steps.map(s=>s.type==='fixed'
+                          ?(nodes.find(x=>x.nodeId===s.nodeId)||{}).name||'?'
+                          :`[${s.nodeIds.map(id=>(nodes.find(x=>x.nodeId===id)||{}).name||'?').join(' / ')} — any order]`
+                        ).join(' → ')} → Finished</div>
+                      </div>
+                      <div className="pj-actions">
+                        <button className="small-btn" onClick={()=>startEditRoute(r)}>Edit</button>
+                        <button className="small-btn danger" onClick={()=>removeRoute(r.routeId)}>Remove</button>
+                      </div>
+                    </div>
+                  ))}
+                  {!routes.length&&<div className="empty">No routes yet — add at least one</div>}
+                </div>
+                {!!nodes.length&&<button className="add-btn" style={{marginTop:8}} onClick={startNewRoute}>+ ADD ROUTE</button>}
+                {!nodes.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:8,fontFamily:'var(--mono)'}}>Add at least one operation before building a route</div>}
+              </>
+            ):(
+              <div className="prod-entry">
+                <div className="prod-entry-title">{routeForm.editingId===null?'New route':'Edit route'}</div>
+                <div className="field"><label>Route name</label><input className="mi" value={routeForm.name} onChange={e=>setRouteForm({...routeForm,name:e.target.value})} placeholder="e.g. Via lathe / Direct to CNC"/></div>
+                <div className="field">
+                  <label>Steps, in order — floating steps in the same box can happen in any order relative to each other</label>
+                  <div style={{display:'flex',flexDirection:'column'}}>
+                    <div className="pipe-node pipe-raw"><div style={{fontSize:11}}>Raw casting stock</div></div>
+                    {routeForm.steps.map((step,i)=>{
+                      if(step.type==='fixed'){
+                        const n=nodes.find(x=>x.nodeId===step.nodeId);
+                        const shared=routesUsingNode(step.nodeId).length>0&&routes.some(r=>r.routeId!==routeForm.editingId&&routeNodeIds(r).includes(step.nodeId));
+                        return (
+                          <React.Fragment key={i}>
+                            <div className="pipe-arrow"><span>↓</span></div>
+                            <div className="pj-row pipe-node">
+                              <div className="pj-info">
+                                <div className="pj-name">{n?n.name:'?'}{shared&&<span style={{color:'var(--accent)',fontSize:10,marginLeft:6}}>· shared queue</span>}</div>
+                                <div className="pj-meta">{n?`${BADGE[n.machineType]?.lbl||n.machineType.toUpperCase()} · ${n.target}/shift · fixed position`:''}</div>
+                              </div>
+                              <button className="small-btn danger" onClick={()=>removeStep(i)}>Remove</button>
+                            </div>
+                          </React.Fragment>
+                        );
+                      }
+                      return (
+                        <React.Fragment key={i}>
+                          <div className="pipe-arrow"><span>↓ unlocks floating group</span></div>
+                          <div className="pj-row pipe-node" style={{borderStyle:'dashed',flexDirection:'column',alignItems:'stretch',gap:6}}>
+                            <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--accent)',letterSpacing:'.06em',textTransform:'uppercase'}}>Floating — any order</div>
+                            {step.nodeIds.map(nodeId=>{
+                              const n=nodes.find(x=>x.nodeId===nodeId);
+                              return (
+                                <div key={nodeId} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                                  <div className="pj-info">
+                                    <div className="pj-name" style={{fontSize:12}}>{n?n.name:'?'}</div>
+                                    <div className="pj-meta">{n?`${BADGE[n.machineType]?.lbl||n.machineType.toUpperCase()} · ${n.target}/shift`:''}</div>
+                                  </div>
+                                  <button className="small-btn danger" onClick={()=>removeNodeFromFloatingStep(i,nodeId)}>Remove</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                    <div className="pipe-arrow pipe-arrow-end"><span>↓ becomes finished units once every step is done</span></div>
+                  </div>
+                  <div style={{marginTop:8,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                    <div>
+                      <label style={{display:'block',fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text2)',marginBottom:6,fontFamily:'var(--mono)'}}>Add fixed step</label>
+                      <div className="role-chips">
+                        {nodes.map(n=><div key={n.nodeId} className="role-chip" onClick={()=>addFixedStep(n.nodeId)}>{n.name}</div>)}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{display:'block',fontSize:10,letterSpacing:'.1em',textTransform:'uppercase',color:'var(--text2)',marginBottom:6,fontFamily:'var(--mono)'}}>Add floating step</label>
+                      <div className="role-chips">
+                        {nodes.map(n=><div key={n.nodeId} className="role-chip" onClick={()=>addFloatingStep(n.nodeId)}>{n.name}</div>)}
+                      </div>
+                      <div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>Adds to the floating group at the end of the route, or starts a new one</div>
+                    </div>
+                  </div>
+                </div>
+                {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
+                <div className="mi-row"><button className="add-btn" style={{background:'var(--accent)'}} onClick={saveRoute}>SAVE ROUTE</button><button className="can-btn" onClick={()=>setRouteForm(null)}>Cancel</button></div>
+              </div>
+            )}
+          </div>
+
+          {msg&&!routeForm&&<div className="save-msg" style={{color:msg.includes('failed')?'var(--warn)':msg.includes('required')||msg.includes('greater')||msg.includes('Add at least')?'var(--danger)':'var(--accent3)'}}>{msg}</div>}
+          <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={saveType}>SAVE CASTING TYPE</button><button className="can-btn" onClick={()=>setEditing(null)}>Cancel</button></div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ── Stock Modal ────────────────────────────────────────────
+function StockModal({castingTypes,setCastingTypes,wip,setWip,stockLog,setStockLog,onClose}) {
+  const [inForm,setInForm]=useState({typeId:'',qty:'',supplier:'',note:''});
+  const [inMsg,setInMsg]=useState('');
+  const [tab,setTab]=useState('balances');
+
+  const persistTypes=async updated=>{ setCastingTypes(updated); await fb.set('casting_types',updated); };
+  const persistLog=async updated=>{ setStockLog(updated); await fb.set('stock_log',updated); };
+
+  const logIn=async()=>{
+    setInMsg('');
+    const qty=Number(inForm.qty);
+    if(!inForm.typeId) return setInMsg('Select a casting type.');
+    if(!qty||qty<=0||isNaN(qty)) return setInMsg('Quantity must be a number greater than 0.');
+    const ct=castingTypes.find(s=>s.id===Number(inForm.typeId));
+    if(!ct) return setInMsg('Casting type not found.');
+    const updatedTypes=castingTypes.map(s=>s.id===ct.id?{...s,rawBalance:Math.round((s.rawBalance+qty)*100)/100}:s);
+    const entry={id:Date.now(),type:'in',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty,supplier:inForm.supplier.trim(),note:inForm.note.trim(),date:todayStr(),time:nowStr(),ts:fullTs()};
+    await persistTypes(updatedTypes);
+    await persistLog([entry,...stockLog].slice(0,500));
+    setInForm({typeId:inForm.typeId,qty:'',supplier:'',note:''});
+    setInMsg('Stock added.');
+  };
+
+  const recentLog=stockLog.slice(0,40);
+
+  return (
+    <Modal onClose={onClose} title="Stock control" wide>
+      <div className="role-chips" style={{marginBottom:'1rem'}}>
+        <div className={`role-chip${tab==='balances'?' active':''}`} onClick={()=>setTab('balances')}>Balances</div>
+        <div className={`role-chip${tab==='in'?' active':''}`} onClick={()=>setTab('in')}>Stock in</div>
+        <div className={`role-chip${tab==='log'?' active':''}`} onClick={()=>setTab('log')}>Movement log</div>
+      </div>
+
+      {tab==='balances'&&(
+        <>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <p className="modal-note" style={{margin:0}}>Shows pieces at each stage of the pipeline. After an operation completes, good output appears below that operation — ready for the next step.</p>
+            <button className="small-btn danger" style={{flexShrink:0,marginLeft:8}} onClick={async()=>{
+              if(!window.confirm('Reset all WIP counts to zero? This clears stale data from deleted casting types. Current casting stock balances are not affected.')) return;
+              setWip({}); await fb.set('wip',{});
+            }}>Reset WIP</button>
+          </div>
+          {castingTypes.map(ct=>(
+            <div key={ct.id} style={{marginBottom:18}}>
+              <div style={{fontSize:12,fontWeight:600,marginBottom:6}}>{ct.name}</div>
+              <div className="pipe-node pipe-raw">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Raw casting stock</div>
+                    <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>Low-stock alert under {ct.lowThreshold} {ct.unit}</div>
+                  </div>
+                  <div style={{fontSize:14,fontWeight:500,color:ct.rawBalance<=ct.lowThreshold?'var(--danger)':'var(--text)'}}>{ct.rawBalance} {ct.unit}</div>
+                </div>
+              </div>
+              {ct.nodes.map(n=>{
+                const routesHere=ct.routes.filter(r=>routeNodeIds(r).includes(Number(n.nodeId)));
+                // WIP key ctId:nodeId = pieces that have completed the PREVIOUS step and are
+                // waiting to enter THIS operation. So it displays BEFORE the operation arrow,
+                // not after it — i.e. "X pieces ready for Face-OD" sits between Bore and Face-OD.
+                const wipCount=getWip(wip,ct.id,n.nodeId);
+                // Only show the WIP row if it's not the first node in every route (first nodes
+                // pull from raw stock, not from a prior WIP pool, so there's nothing to show).
+                const isFirstNodeInAnyRoute=ct.routes.some(r=>{
+                  const ids=r.steps.flatMap(s=>s.type==='fixed'?[Number(s.nodeId)]:s.nodeIds.map(Number));
+                  return ids[0]===Number(n.nodeId);
+                });
+                return (
+                  <React.Fragment key={n.nodeId}>
+                    {!isFirstNodeInAnyRoute&&(
+                      <div className="pipe-node pipe-raw" style={{opacity:.85}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div style={{fontSize:11,color:'var(--text2)'}}>Ready for {n.name}</div>
+                          <div style={{fontSize:12,color:wipCount>0?'var(--accent3)':'var(--text3)'}}>{wipCount} {ct.unit}</div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="pipe-arrow"><span>↓ {n.name} ({BADGE[n.machineType]?.lbl||n.machineType.toUpperCase()}){routesHere.length>1?` · via ${routesHere.map(r=>r.name).join(' / ')}`:''}</span></div>
+                  </React.Fragment>
+                );
+              })}
+              <div className="pipe-arrow pipe-arrow-end"><span>↓ each route's final step becomes finished units</span></div>
+            </div>
+          ))}
+          {!castingTypes.length&&<div className="empty">No casting types yet — add one in Casting types</div>}
+        </>
+      )}
+
+      {tab==='in'&&(
+        <>
+          <p className="modal-note">Record pre-cast material received from the foundry. This adds directly to the casting type's raw balance.</p>
+          <div className="field"><label>Casting type</label>
+            <select className="mi" value={inForm.typeId} onChange={e=>setInForm({...inForm,typeId:e.target.value})}>
+              <option value="">— Select casting type —</option>
+              {castingTypes.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rawBalance} {s.unit} in stock)</option>)}
+            </select>
+          </div>
+          <div className="field"><label>Quantity received {inForm.typeId?`(${(castingTypes.find(s=>s.id===Number(inForm.typeId))||{}).unit||''})`:''}</label>
+            <input className="mi" type="number" min="0" step="1" value={inForm.qty} onChange={e=>setInForm({...inForm,qty:e.target.value})} placeholder="e.g. 100"/>
+          </div>
+          <div className="field"><label>Supplier / foundry (optional)</label><input className="mi" value={inForm.supplier} onChange={e=>setInForm({...inForm,supplier:e.target.value})} placeholder="e.g. Rajasthan Foundry Co."/></div>
+          <div className="field"><label>Note (optional)</label><input className="mi" value={inForm.note} onChange={e=>setInForm({...inForm,note:e.target.value})} placeholder="e.g. PO #4521"/></div>
+          {inMsg&&<div className="save-msg" style={{color:inMsg.includes('Select')||inMsg.includes('greater')?'var(--danger)':'var(--accent3)'}}>{inMsg}</div>}
+          <button className="add-btn" onClick={logIn}>+ ADD STOCK</button>
+        </>
+      )}
+
+      {tab==='log'&&(
+        <>
+          <p className="modal-note">Most recent 40 stock movements — manual stock-in plus automatic deductions and defects from completed shifts.</p>
+          <div className="alert-list">
+            {!recentLog.length?<div className="empty">No stock movements logged yet</div>:recentLog.map(e=>(
+              <div className={`al-item${e.type==='out'||e.type==='defect'?' warn':' info'}`} key={e.id}>
+                <div>
+                  <div className="al-msg">{e.type==='in'?'+':'−'}{e.qty} {e.unit} · {e.itemName}{e.stageLabel?` · ${e.stageLabel}`:''}{e.type==='out'&&e.machine?` · ${e.machine}`:''}{e.supplier?` · ${e.supplier}`:''}{e.note?` · ${e.note}`:''}</div>
+                  <div className="al-time">{e.date} {e.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+
+function AssignModal({machines,setMachines,users,castingTypes,wip,onClose}) {
+  const [selM,setSelM]=useState('');
+  const [selOp,setSelOp]=useState('');
+  const [selCt,setSelCt]=useState('');
+  const [selRouteId,setSelRouteId]=useState('');
+  const [selNodeId,setSelNodeId]=useState('');
+  const [needsSetup,setNeedsSetup]=useState(false);
+  const [setupHours,setSetupHours]=useState(2);
+  const [selShift,setSelShift]=useState('day');
+  const [msg,setMsg]=useState('');
+  const operators=users.filter(u=>u.role==='operator');
+  const cncVmc=machines.filter(m=>m.shift==='cnc_vmc').map(m=>withShift(m,selShift));
+  const manualMachines=machines.filter(m=>m.shift==='manual');
+  // All assignable machines: CNC/VMC (day/night slot aware) + manual (flat single slot)
+  const allAssignable=[...cncVmc,...manualMachines];
+  const mObj=allAssignable.find(m=>m.id===selM);
+  const ctObj=castingTypes.find(c=>Number(c.id)===Number(selCt));
+  const routeObj=ctObj&&selRouteId?ctObj.routes.find(r=>Number(r.routeId)===Number(selRouteId)):null;
+  // Every node referenced by this route, coerced to numbers for safe comparison.
+  const routeAllNodeIds=routeObj?routeNodeIds(routeObj).map(Number):[];
+  const eligibleNodes=routeAllNodeIds.map(id=>ctObj.nodes.find(n=>Number(n.nodeId)===id)).filter(n=>n&&mObj&&n.machineType===mObj.type);
+  const nodeObj=ctObj&&selNodeId?ctObj.nodes.find(n=>Number(n.nodeId)===Number(selNodeId)):null;
+  const eligibleCastingTypes=mObj?castingTypes.filter(ct=>ct.routes.some(r=>routeNodeIds(r).some(id=>{const n=ct.nodes.find(x=>Number(x.nodeId)===Number(id));return n&&n.machineType===mObj.type;}))):[];
+  const eligibleRoutes=ctObj&&mObj?ctObj.routes.filter(r=>routeNodeIds(r).some(id=>{const n=ctObj.nodes.find(x=>Number(x.nodeId)===Number(id));return n&&n.machineType===mObj.type;})):[];
+  useEffect(()=>{setSelCt('');setSelRouteId('');setSelNodeId('');setNeedsSetup(false);setSetupHours(2);},[selM,selShift]);
+  useEffect(()=>{setSelRouteId('');setSelNodeId('');setNeedsSetup(false);setSetupHours(2);},[selCt]);
+  useEffect(()=>{setSelNodeId('');setNeedsSetup(false);setSetupHours(2);},[selRouteId]);
+
+  // Finds which step (and, for floating steps, whether the node sits in a floating group) the
+  // selected node belongs to in this route — needed to work out where its input comes from.
+  const stepInfo=(()=>{
+    if(!routeObj||!nodeObj) return null;
+    const nodeIdN=Number(nodeObj.nodeId);
+    for(let i=0;i<routeObj.steps.length;i++){
+      const step=routeObj.steps[i];
+      if(step.type==='fixed'&&Number(step.nodeId)===nodeIdN) return {index:i,step,isFloating:false};
+      if(step.type==='floating'&&step.nodeIds.map(Number).includes(nodeIdN)) return {index:i,step,isFloating:true};
+    }
+    return null;
+  })();
+  const isFirstStep=stepInfo?stepInfo.index===0:false;
+
+  // Input for the chosen node: raw casting stock if it's the very first step in the route. Otherwise,
+  // for a fixed step it pulls from the WIP left by whatever came immediately before (a single node if
+  // fixed, or the floating gate if the previous step was a floating group). For a floating step, every
+  // node in that group shares the SAME input WIP (whatever unlocked the group) — but each node tracks
+  // its OWN completed count separately, since a count alone can't tell which individual pieces still
+  // need which floating operation.
+  const availableInput=(()=>{
+    if(!routeObj||!nodeObj||!stepInfo) return null;
+    if(isFirstStep) return ctObj.rawBalance;
+    const prevStep=routeObj.steps[stepInfo.index-1];
+    if(prevStep.type==='fixed') return getWip(wip,ctObj.id,prevStep.nodeId);
+    // Previous step was a floating group: its "release" WIP key is keyed by the group's gate id —
+    // we use the first nodeId in that floating group as a stable gate identifier.
+    return getWip(wip,ctObj.id,`gate:${prevStep.nodeIds[0]}`);
+  })();
+
+  const hasRate=nodeObj&&nodeObj.ratePerHour&&nodeObj.shiftHours;
+  const adjustedTarget=hasRate&&needsSetup
+    ? Math.max(0, Math.round(nodeObj.ratePerHour * Math.max(0, nodeObj.shiftHours - Number(setupHours||0))))
+    : nodeObj ? nodeObj.target : null;
+
+  const assign=async()=>{
+    if(!selM||!selOp||!selCt||!selRouteId||!selNodeId) return setMsg('Select machine, operator, casting type, route, and step.');
+    if(needsSetup&&!hasRate) return setMsg('This operation has no units/hour rate set — edit it in Casting types first, or turn off setup adjustment.');
+    const opUser=users.find(u=>u.username===selOp);
+    const finalTarget=needsSetup&&hasRate?adjustedTarget:nodeObj.target;
+    const updated=patchMachineShift(machines,selM,selShift,{
+      castingTypeId:Number(selCt),routeId:Number(selRouteId),nodeId:Number(selNodeId),prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
+      assignedOperator:selOp,operator:opUser?opUser.name:selOp,status:'running',progress:0,output:0,
+      setupApplied:needsSetup,setupHoursUsed:needsSetup?Number(setupHours):0,adjustedTarget:needsSetup?finalTarget:null,
+      settingApproved:false,lineInspection:null,settingApprovalStatus:null,settingRejectionNote:null
+    });
+    setMachines(updated); await fb.set('machines',updated);
+    setMsg('Assigned!'); setSelM(''); setSelOp(''); setSelCt(''); setSelRouteId(''); setSelNodeId(''); setNeedsSetup(false); setSetupHours(2);
+  };
+  const clear=async mid=>{
+    const updated=patchMachineShift(machines,mid,selShift,{assignedOperator:null});
+    setMachines(updated); await fb.set('machines',updated);
+  };
+  const active=allAssignable.filter(m=>m.assignedOperator);
+  const opAssignmentCounts={};
+  active.forEach(m=>{ opAssignmentCounts[m.assignedOperator]=(opAssignmentCounts[m.assignedOperator]||0)+1; });
+
+  return (
+    <Modal onClose={onClose} title="Assign jobs" wide>
+      <p className="modal-note">Assign an operator to any machine for one step of a chosen route. For CNC/VMC machines, day and night shift assignments are kept separate — select the shift first. Manual machines run a single shift only, so the shift toggle below only applies to CNC/VMC.</p>
+      {mObj&&mObj.shift==='manual'&&<div className="info-box neutral" style={{marginBottom:'1rem',fontSize:11}}>Manual machine — single shift, no line inspection required.</div>}
+      <div className="field"><label>Shift</label>
+        <div className="role-chips">
+          <div className={`role-chip${selShift==='day'?' active':''}`} onClick={()=>setSelShift('day')}>☀ Day shift</div>
+          <div className={`role-chip${selShift==='night'?' active':''}`} onClick={()=>setSelShift('night')}>🌙 Night shift</div>
+        </div>
+      </div>
+      <div className="field"><label>Machine</label>
+        <select className="mi" value={selM} onChange={e=>setSelM(e.target.value)}>
+          <option value="">— Select machine —</option>
+          {allAssignable.map(m=><option key={m.id} value={m.id}>{m.id} · {m.name} ({BADGE[m.type].lbl}){m.shift==='manual'?' · manual shift':''}{m.assignedOperator?` — ${m.operator}`:''}</option>)}
+        </select>
+      </div>
+      <div className="field"><label>Operator</label>
+        <select className="mi" value={selOp} onChange={e=>setSelOp(e.target.value)}>
+          <option value="">— Select operator —</option>
+          {operators.map(o=><option key={o.username} value={o.username}>{o.name} ({o.username}){opAssignmentCounts[o.username]?` — already on ${opAssignmentCounts[o.username]} machine${opAssignmentCounts[o.username]>1?'s':''}`:''}</option>)}
+        </select>
+        {!operators.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>No operator accounts — add via Manage users</div>}
+      </div>
+      <div className="field"><label>Casting type</label>
+        <select className="mi" value={selCt} disabled={!selM} onChange={e=>setSelCt(e.target.value)}>
+          <option value="">— Select casting type —</option>
+          {eligibleCastingTypes.map(ct=><option key={ct.id} value={ct.id}>{ct.name}</option>)}
+        </select>
+        {selM&&!eligibleCastingTypes.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>No casting types route through {mObj&&BADGE[mObj.type].lbl} yet</div>}
+      </div>
+      {selCt&&(
+        <div className="field"><label>Route</label>
+          <select className="mi" value={selRouteId} onChange={e=>setSelRouteId(e.target.value)}>
+            <option value="">— Select route —</option>
+            {eligibleRoutes.map(r=><option key={r.routeId} value={r.routeId}>{r.name} ({r.steps.map(s=>s.type==='fixed'?(ctObj.nodes.find(x=>x.nodeId===s.nodeId)||{}).name||'?':`[${s.nodeIds.map(id=>(ctObj.nodes.find(x=>x.nodeId===id)||{}).name||'?').join('/')}]`).join(' → ')})</option>)}
+          </select>
+          {!eligibleRoutes.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>No route for this casting type uses {mObj&&BADGE[mObj.type].lbl}</div>}
+        </div>
+      )}
+      {selRouteId&&(
+        <div className="field"><label>Step</label>
+          <select className="mi" value={selNodeId} onChange={e=>setSelNodeId(e.target.value)}>
+            <option value="">— Select step —</option>
+            {eligibleNodes.map(n=>{
+              const inFloating=routeObj.steps.some(s=>s.type==='floating'&&s.nodeIds.map(Number).includes(Number(n.nodeId)));
+              return <option key={n.nodeId} value={n.nodeId}>{n.name} ({n.target}/shift){inFloating?' · floating':''}</option>;
+            })}
+          </select>
+          {!eligibleNodes.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>This route has no step on {mObj&&BADGE[mObj.type].lbl}</div>}
+        </div>
+      )}
+
+      {nodeObj&&stepInfo&&(
+        <div className="info-box neutral" style={{marginBottom:'1rem'}}>
+          {isFirstStep?'Pulls from raw casting stock':stepInfo.isFloating?'Pulls from the floating group\'s shared pool (any floating step in this group can be done in any order)':'Pulls from WIP left by the previous step'}: <b style={{color:'var(--text)'}}>{availableInput} {ctObj.unit} available</b>
+          {availableInput<nodeObj.target&&<div style={{marginTop:4,color:'var(--warn)'}}>⚠ Less input available than this operation's full-shift target — operator may run out mid-shift.</div>}
+        </div>
+      )}
+
+      {nodeObj&&(
+        <div className="field">
+          <label>Machine setting / setup needed?</label>
+          <div className="role-chips">
+            <div className={`role-chip${!needsSetup?' active':''}`} onClick={()=>setNeedsSetup(false)}>No — full shift target</div>
+            <div className={`role-chip${needsSetup?' active':''}`} onClick={()=>setNeedsSetup(true)}>Yes — needs setup</div>
+          </div>
+        </div>
+      )}
+
+      {nodeObj&&needsSetup&&(
+        <div className="field">
+          <label>Setup hours (default 2 — increase if longer setup expected)</label>
+          <input className="mi" type="number" min="0" step="0.5" value={setupHours} onChange={e=>setSetupHours(e.target.value)}/>
+          {hasRate?(
+            <div className="info-box neutral" style={{marginTop:8,marginBottom:0}}>
+              {nodeObj.shiftHours}hr shift − {setupHours||0}hr setup = {Math.max(0,nodeObj.shiftHours-Number(setupHours||0)).toFixed(1)}hr production<br/>
+              Adjusted target: <b style={{color:'var(--text)'}}>{adjustedTarget} units</b> (at {nodeObj.ratePerHour}/hr) instead of {nodeObj.target}
+            </div>
+          ):(
+            <div className="info-box danger" style={{marginTop:8,marginBottom:0}}>This operation has no units/hour rate set. Edit it in Casting types to enable auto-adjusted targets, or assign without setup.</div>
+          )}
+        </div>
+      )}
+
+      {msg&&<div className="save-msg" style={{color:msg.includes('Select')||msg.includes('rate')?'var(--danger)':'var(--accent3)'}}>{msg}</div>}
+      <button className="add-btn" onClick={assign}>ASSIGN →</button>
+
+      {active.length>0&&(
+        <>
+          <div className="sb-title" style={{marginTop:'1.25rem'}}>Current assignments — {selShift==='day'?'Day shift':'Night shift'}</div>
+          {Object.entries(
+            active.reduce((acc,m)=>{ (acc[m.assignedOperator]=acc[m.assignedOperator]||[]).push(m); return acc; },{})
+          ).map(([opUsername,opMachines])=>(
+            <div key={opUsername} style={{marginBottom:8}}>
+              <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',marginBottom:4}}>{opMachines[0].operator}{opMachines.length>1?` (${opMachines.length} machines)`:''}</div>
+              {opMachines.map(m=>{
+                const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
+                const route=ct&&m.routeId?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
+                const node=ct&&m.nodeId?ct.nodes.find(n=>Number(n.nodeId)===Number(m.nodeId)):null;
+                return (
+                  <div className="pj-row" key={m.id} style={{marginBottom:4}}>
+                    <div className="pj-info">
+                      <div className="pj-name">{m.id}{m.setupApplied?' · setup applied':''}</div>
+                      <div className="pj-meta">{ct?`${ct.name} — ${route?route.name:'—'} (${node?node.name:'—'})`:'—'}{m.setupApplied?` · target ${m.adjustedTarget}`:''}</div>
+                    </div>
+                    <button className="small-btn danger" onClick={()=>clear(m.id)}>Clear</button>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ── Online Modal ───────────────────────────────────────────
+function OnlineModal({sessions,sid,onClose}) {
+  const now=Date.now();
+  const list=Object.entries(sessions||{}).map(([id,s])=>({id,...s})).filter(s=>now-s.lastSeen<=120000).sort((a,b)=>b.lastSeen-a.lastSeen);
+  return (
+    <Modal onClose={onClose} title="Online now">
+      <p className="modal-note">Workers currently signed in across all devices. Updates every 30 seconds.</p>
+      {!list.length?<div className="empty">No one else online</div>:list.map(s=>(
+        <div className="user-row" key={s.id}>
+          <div className="user-row-avatar" style={{background:AC[s.role]||'#888'}}>{initials(s.name)}</div>
+          <div className="user-row-info"><div className="user-row-name">{s.name}{s.id===sid?' (you)':''}</div><div className="user-row-meta">{s.username} · {s.role}</div></div>
+          <span style={{fontSize:10,padding:'2px 7px',borderRadius:10,background:'#00d97720',color:'var(--accent3)',fontFamily:'var(--mono)',flexShrink:0}}>● online</span>
+        </div>
+      ))}
+    </Modal>
+  );
+}
+
+// ── Shift Complete Modal ───────────────────────────────────
+function ShiftCompleteModal({machine,pj,onSubmit,onClose}) {
+  const hasLog=machine.prodCount>0||machine.newPieces>0||machine.reworkPieces>0||machine.castingDefects>0||machine.machiningDefects>0;
+  const [newP,setNewP]=useState(hasLog?String(machine.newPieces||0):'');
+  const [reworkP,setReworkP]=useState(hasLog?String(machine.reworkPieces||0):'');
+  const [castDef,setCastDef]=useState(hasLog?String(machine.castingDefects||0):'');
+  const [machDef,setMachDef]=useState(hasLog?String(machine.machiningDefects||0):'');
+  const [reason,setReason]=useState('');
+  const [err,setErr]=useState('');
+  const good=(Number(newP)||0)+(Number(reworkP)||0);
+  const consumed=good+(Number(castDef)||0)+(Number(machDef)||0);
+  const filled=newP!==''&&reworkP!==''&&castDef!==''&&machDef!=='';
+  const isBelow=filled&&good<pj.target;
+  const isMet=filled&&good>=pj.target;
+  const submit=()=>{
+    setErr('');
+    if(!filled) return setErr('Enter all four counts (use 0 if none).');
+    if([newP,reworkP,castDef,machDef].some(v=>Number(v)<0)) return setErr('Counts cannot be negative.');
+    if(isBelow&&!reason.trim()) return setErr('Reason required when below target.');
+    onSubmit({newPieces:Number(newP),reworkPieces:Number(reworkP),castingDefects:Number(castDef),machiningDefects:Number(machDef),total:good,consumed,reason:reason.trim()});
+  };
+  return (
+    <Modal onClose={onClose} title="Mark shift complete">
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>
+        <div>{machine.name} · {pj.name}</div>
+        <div style={{marginTop:2}}>Target: <b style={{color:'var(--text)'}}>{pj.target} units</b></div>
+        {hasLog&&<div style={{marginTop:2,fontSize:10,color:'var(--text2)'}}>Carried over from last logged progress — update if more was produced since then.</div>}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        <div className="field" style={{marginBottom:0}}><label>New pieces</label><input className="mi" type="number" min="0" placeholder="0" value={newP} onChange={e=>setNewP(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>Rework pieces</label><input className="mi" type="number" min="0" placeholder="0" value={reworkP} onChange={e=>setReworkP(e.target.value)}/></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem'}}>
+        <div className="field" style={{marginBottom:0}}><label>Casting defect</label><input className="mi" type="number" min="0" placeholder="0" value={castDef} onChange={e=>setCastDef(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>Machining defect</label><input className="mi" type="number" min="0" placeholder="0" value={machDef} onChange={e=>setMachDef(e.target.value)}/></div>
+      </div>
+      {filled&&(
+        <div className={`info-box${isBelow?' danger':isMet?' success':' neutral'}`} style={{marginBottom:'1rem'}}>
+          Good output: <b>{good} units</b>
+          {isBelow&&<span> — short by {pj.target-good}</span>}
+          {isMet&&<span> — target met ✓</span>}
+          <div style={{marginTop:4,fontSize:10}}>New: {Number(newP)||0} · Rework: {Number(reworkP)||0} · Casting defect: {Number(castDef)||0} · Machining defect: {Number(machDef)||0}</div>
+          <div style={{marginTop:2,fontSize:10,color:'var(--text2)'}}>Total pulled from stock/WIP: {consumed} {(Number(castDef)||0)+(Number(machDef)||0)>0?'(defects are scrapped, not carried forward)':''}</div>
+        </div>
+      )}
+      {isBelow&&(
+        <div className="field">
+          <label>Reason for shortfall (required)</label>
+          <textarea className="mi" rows={3} style={{resize:'vertical',lineHeight:1.6}} placeholder="e.g. Machine breakdown, material shortage..." value={reason} onChange={e=>setReason(e.target.value)}/>
+        </div>
+      )}
+      {err&&<div className="error-msg">{err}</div>}
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" onClick={submit}>COMPLETE SHIFT →</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Log Progress Modal ─────────────────────────────────────
+function LogProgressModal({machine,pj,onSubmit,onClose}) {
+  const [newP,setNewP]=useState(machine.newPieces||0);
+  const [reworkP,setReworkP]=useState(machine.reworkPieces||0);
+  const [castDef,setCastDef]=useState(machine.castingDefects||0);
+  const [machDef,setMachDef]=useState(machine.machiningDefects||0);
+  const [err,setErr]=useState('');
+  const good=(Number(newP)||0)+(Number(reworkP)||0);
+  const consumed=good+(Number(castDef)||0)+(Number(machDef)||0);
+  const submit=()=>{
+    setErr('');
+    if(newP===''||reworkP===''||castDef===''||machDef==='') return setErr('Enter all four counts (use 0 if none).');
+    if([newP,reworkP,castDef,machDef].some(v=>Number(v)<0)) return setErr('Counts cannot be negative.');
+    onSubmit({newPieces:Number(newP),reworkPieces:Number(reworkP),castingDefects:Number(castDef),machiningDefects:Number(machDef),total:good,consumed});
+  };
+  return (
+    <Modal onClose={onClose} title="Log production">
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>
+        <div>{machine.name} · {pj.name}</div>
+        <div style={{marginTop:2}}>Target: <b style={{color:'var(--text)'}}>{pj.target} units</b> (this updates your running count — it does not end the shift)</div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        <div className="field" style={{marginBottom:0}}><label>New pieces (so far)</label><input className="mi" type="number" min="0" value={newP} onChange={e=>setNewP(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>Rework pieces (so far)</label><input className="mi" type="number" min="0" value={reworkP} onChange={e=>setReworkP(e.target.value)}/></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem'}}>
+        <div className="field" style={{marginBottom:0}}><label>Casting defect (so far)</label><input className="mi" type="number" min="0" value={castDef} onChange={e=>setCastDef(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>Machining defect (so far)</label><input className="mi" type="number" min="0" value={machDef} onChange={e=>setMachDef(e.target.value)}/></div>
+      </div>
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>Good output: <b style={{color:'var(--text)'}}>{good} / {pj.target}</b> &nbsp;·&nbsp; Total pulled: {consumed}</div>
+      {err&&<div className="error-msg">{err}</div>}
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:'var(--accent)'}} onClick={submit}>SAVE PROGRESS</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+// ── Breakdown Modal ────────────────────────────────────────
+function BreakdownModal({machine,onSubmit,onClose}) {
+  const [reason,setReason]=useState('');
+  return (
+    <Modal onClose={onClose} title="Report breakdown">
+      <div className="info-box danger" style={{marginBottom:'1rem'}}>
+        <div style={{fontFamily:'var(--mono)',fontWeight:500,color:'var(--danger)'}}>⚠ {machine.name}</div>
+        <div style={{marginTop:2,color:'var(--text2)'}}>This will mark the machine as broken down and alert admin/supervisor immediately.</div>
+      </div>
+      <div className="field">
+        <label>Reason for breakdown (required)</label>
+        <textarea className="mi" rows={4} style={{resize:'vertical',lineHeight:1.6}} placeholder="e.g. Spindle overheating, tool breakage..." value={reason} onChange={e=>setReason(e.target.value)}/>
+      </div>
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:'var(--danger)',opacity:reason.trim()?1:0.5}} onClick={()=>{if(reason.trim())onSubmit(reason.trim());}}>REPORT BREAKDOWN →</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Repair Assessment Modal ───────────────────────────────
+function RepairAssessmentModal({machine,breakdownReason,onSubmit,onClose}) {
+  const [assessment,setAssessment]=useState('');
+  return (
+    <Modal onClose={onClose} title="Breakdown assessment">
+      <div className="info-box danger" style={{marginBottom:'1rem'}}>
+        <div style={{fontFamily:'var(--mono)',fontWeight:500,color:'var(--danger)'}}>⚠ {machine.name}</div>
+        {breakdownReason&&<div style={{marginTop:4,color:'var(--text2)'}}>Reported reason: {breakdownReason}</div>}
+      </div>
+      <div className="field">
+        <label>Breakdown assessment — root cause & corrective action (required)</label>
+        <textarea className="mi" rows={4} style={{resize:'vertical',lineHeight:1.6}} placeholder="e.g. Spindle bearing worn out, replaced and tested. Cleared for production." value={assessment} onChange={e=>setAssessment(e.target.value)}/>
+      </div>
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:'var(--accent3)',color:'#000',opacity:assessment.trim()?1:0.5}} onClick={()=>{if(assessment.trim())onSubmit(assessment.trim());}}>MARK REPAIRED →</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Shortfall Decision Modal ─────────────────────────────────
+function DecisionModal({alertData,decision,onSubmit,onClose}) {
+  const [note,setNote]=useState('');
+  const isApprove=decision==='approved';
+  return (
+    <Modal onClose={onClose} title={isApprove?'Approve shortfall':'Disapprove shortfall'}>
+      <div className={`info-box ${isApprove?'neutral':'danger'}`} style={{marginBottom:'1rem'}}>
+        <div>{alertData.machine} · {alertData.job}</div>
+        <div style={{marginTop:2}}>Produced <b style={{color:'var(--text)'}}>{alertData.produced}</b> / Target <b style={{color:'var(--text)'}}>{alertData.target}</b> (–{alertData.shortfall})</div>
+        {alertData.reason&&<div style={{marginTop:4,color:'var(--text2)'}}>Operator's reason: "{alertData.reason}"</div>}
+      </div>
+      <div className="field">
+        <label>{isApprove?'Reason for approval (required)':'Action taken (required)'}</label>
+        <textarea className="mi" rows={4} style={{resize:'vertical',lineHeight:1.6}} placeholder={isApprove?'e.g. Material shortage confirmed valid — no penalty, target adjusted next shift.':'e.g. Counselled operator, reviewed process, extra training scheduled.'} value={note} onChange={e=>setNote(e.target.value)}/>
+      </div>
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'#000':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'DISAPPROVE →'}</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Setting Inspection Decision Modal ────────────────────────
+function SettingDecisionModal({alertData,decision,onSubmit,onClose}) {
+  const [note,setNote]=useState('');
+  const isApprove=decision==='approved';
+  const filledRows=(alertData.rows||[]).filter(r=>r.specification.trim()||r.piece1.trim()||r.piece2.trim());
+  return (
+    <Modal onClose={onClose} title={isApprove?'Approve setting inspection':'Reject setting inspection'} wide>
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>
+        <div>{alertData.machine} · {alertData.operator}</div>
+        <div style={{marginTop:2,color:'var(--text2)'}}>{alertData.shiftKey==='night'?'Night':'Day'} shift — line inspection submitted for review</div>
+      </div>
+      {filledRows.length>0?(
+        <table className="insp-table" style={{marginBottom:'1rem'}}>
+          <thead>
+            <tr><th style={{width:48}}>Sr. No.</th><th>Specification</th><th>1st Piece</th><th>2nd Piece</th></tr>
+          </thead>
+          <tbody>
+            {filledRows.map(r=>(
+              <tr key={r.sr}><td className="sr">{r.sr}</td><td style={{padding:'6px 4px'}}>{r.specification||'—'}</td><td style={{padding:'6px 4px'}}>{r.piece1||'—'}</td><td style={{padding:'6px 4px'}}>{r.piece2||'—'}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      ):(
+        <div className="info-box danger" style={{marginBottom:'1rem'}}>No rows were filled in — nothing to verify against spec.</div>
+      )}
+      <div className="field">
+        <label>{isApprove?'Approval note (required)':'Reason for rejection (required)'}</label>
+        <textarea className="mi" rows={3} style={{resize:'vertical',lineHeight:1.6}} placeholder={isApprove?'e.g. Sizes verified within tolerance, cleared to run.':'e.g. 2nd piece out of tolerance on row 3, redo setup and re-measure.'} value={note} onChange={e=>setNote(e.target.value)}/>
+      </div>
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'#000':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'REJECT →'}</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Line Inspection Modal ────────────────────────────────────
+function LineInspectionModal({machine,onSubmit,onClose}) {
+  const ROWS=8;
+  const [rows,setRows]=useState(()=>Array.from({length:ROWS},(_,i)=>({sr:i+1,specification:'',piece1:'',piece2:''})));
+  const update=(i,field,val)=>setRows(prev=>prev.map((r,idx)=>idx===i?{...r,[field]:val}:r));
+  const filledCount=rows.filter(r=>r.specification.trim()).length;
+  return (
+    <Modal onClose={onClose} title="Line Inspection" wide>
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>
+        <div>{machine.name} · {machine.operator}</div>
+        <div style={{marginTop:2,color:'var(--text2)'}}>Record first-off and second-off piece sizes against spec before production starts.</div>
+      </div>
+      <table className="insp-table">
+        <thead>
+          <tr>
+            <th rowSpan={2} style={{width:48}}>Sr. No.</th>
+            <th rowSpan={2}>Specification</th>
+            <th colSpan={2}>Sizes</th>
+          </tr>
+          <tr>
+            <th>1st Piece</th>
+            <th>2nd Piece</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r,i)=>(
+            <tr key={r.sr}>
+              <td className="sr">{r.sr}</td>
+              <td><input value={r.specification} onChange={e=>update(i,'specification',e.target.value)} placeholder="e.g. Ø12.5 ±0.05"/></td>
+              <td><input value={r.piece1} onChange={e=>update(i,'piece1',e.target.value)}/></td>
+              <td><input value={r.piece2} onChange={e=>update(i,'piece2',e.target.value)}/></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mi-row" style={{marginTop:'.5rem'}}>
+        <button className="add-btn" style={{background:'var(--warn)',color:'#000'}} onClick={()=>onSubmit(rows)}>APPROVE SETTING →</button>
+        <button className="can-btn" onClick={onClose}>Cancel</button>
+      </div>
+      {filledCount===0&&<div style={{fontSize:10,color:'var(--text3)',marginTop:8,fontFamily:'var(--mono)'}}>Tip: fill in at least the specs you've checked — blank rows are fine if not all are inspected.</div>}
+    </Modal>
+  );
+}
+
+
+// ── Download Report Modal ──────────────────────────────────
+function DownloadModal({alerts,onClose}) {
+  const [from,setFrom]=useState(todayStr());
+  const [to,setTo]=useState(todayStr());
+  const [groupBy,setGroupBy]=useState('all_machines');
+  const [filterCat,setFilterCat]=useState('all');
+  const [filterVal,setFilterVal]=useState('');
+
+  const machineIds=[...new Set(alerts.filter(a=>a.data&&a.data.machine).map(a=>a.data.machine))].sort();
+  const operatorNames=[...new Set(alerts.filter(a=>a.data&&a.data.operator).map(a=>a.data.operator))].sort();
+
+  const baseFiltered=alerts.filter(a=>{
+    const d=a.date||todayStr();
+    if(d<from||d>to) return false;
+    if(filterCat==='production') return a.data&&(a.data.category==='production'||a.data.category==='shortfall');
+    if(filterCat==='shortfall') return a.type==='shortfall'||(a.data&&a.data.category==='shortfall');
+    if(filterCat==='breakdown') return a.type==='danger'||(a.data&&a.data.category==='breakdown');
+    return true;
+  });
+
+  const filtered=baseFiltered.filter(a=>{
+    if(!filterVal) return true;
+    if(groupBy==='per_machine') return a.data&&a.data.machine===filterVal;
+    if(groupBy==='per_operator') return a.data&&a.data.operator===filterVal;
+    return true;
+  });
+
+  const buildRows=()=>{
+    const header=['Date','Time','Category','Machine','Operator','Job','Total Produced','New Pieces','Rework Pieces','Target','Shortfall','Reason','Decision','Decision Note','Decided By'];
+    const rows=[header];
+    filtered.forEach(a=>{
+      if(!a.data) return;
+      const cat=a.data.category||(a.type==='shortfall'?'shortfall':a.type==='danger'?'breakdown':'alert');
+      rows.push([a.date||'',a.time||'',cat.charAt(0).toUpperCase()+cat.slice(1),a.data.machine||'',a.data.operator||'',a.data.job||'',a.data.produced??'',a.data.newPieces??'',a.data.reworkPieces??'',a.data.target??'',a.data.shortfall||'',a.data.reason||'',a.data.status&&a.data.status!=='pending'?a.data.status:'',a.data.decisionNote||'',a.data.decidedBy||'']);
+    });
+    return rows;
+  };
+
+  const buildSummary=()=>{
+    const groups={};
+    filtered.forEach(a=>{
+      if(!a.data) return;
+      const key=groupBy==='per_operator'?(a.data.operator||'Unknown'):(a.data.machine||'Unknown');
+      if(!groups[key]) groups[key]={key,production:0,totalProduced:0,newPieces:0,reworkPieces:0,shortfalls:0,breakdowns:0,shortfallUnits:0};
+      const g=groups[key];
+      const cat=a.data.category||(a.type==='shortfall'?'shortfall':a.type==='danger'?'breakdown':'');
+      if(cat==='production'||cat==='shortfall'){g.production++;g.totalProduced+=Number(a.data.produced)||0;g.newPieces+=Number(a.data.newPieces)||0;g.reworkPieces+=Number(a.data.reworkPieces)||0;}
+      if(cat==='shortfall'){g.shortfalls++;g.shortfallUnits+=Number(a.data.shortfall)||0;}
+      if(cat==='breakdown') g.breakdowns++;
+    });
+    const label=groupBy==='per_operator'?'Operator':'Machine';
+    const header=[label,'Shifts Completed','Total Produced','New Pieces','Rework Pieces','Shortfall Shifts','Shortfall Units','Breakdowns'];
+    const rows=[header];
+    Object.values(groups).sort((a,b)=>a.key.localeCompare(b.key)).forEach(g=>{
+      rows.push([g.key,g.production,g.totalProduced,g.newPieces,g.reworkPieces,g.shortfalls,g.shortfallUnits,g.breakdowns]);
+    });
+    return rows;
+  };
+
+  const toCSV=rows=>rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+
+  const downloadCSV=()=>{
+    const csv='SUMMARY\n'+toCSV(buildSummary())+'\n\nDETAIL\n'+toCSV(buildRows());
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const el=document.createElement('a');
+    el.href=url; el.download=`factoryos-report-${from}-to-${to}.csv`; el.click(); URL.revokeObjectURL(url);
+  };
+
+  const downloadPDF=()=>{
+    const detail=buildRows();
+    const summary=buildSummary();
+    const groupLabel={'all_machines':'All Machines','all_operators':'All Operators','per_machine':'Per Machine','per_operator':'Per Operator'}[groupBy];
+    const catLabel={'all':'All','production':'Production','shortfall':'Shortfalls','breakdown':'Breakdowns'}[filterCat];
+    const thS='background:#1f2330;color:#dde2ef;padding:6px 8px;text-align:left;border:1px solid #2e3445;font-family:monospace;font-size:10px';
+    const tdS='padding:5px 8px;border:1px solid #2e3445;color:#dde2ef;vertical-align:top;font-size:11px';
+    const makeTable=(rows,title)=>{
+      if(rows.length<=1) return `<h3 style="font-family:monospace;font-size:11px;text-transform:uppercase;color:#7d849a;margin:0 0 8px">${title}</h3><p style="color:#7d849a;font-size:12px">No data</p>`;
+      const [hdr,...data]=rows;
+      return `<h3 style="font-family:monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7d849a;margin:0 0 8px">${title}</h3>
+      <table style="border-collapse:collapse;width:100%;margin-bottom:28px">
+        <thead><tr>${hdr.map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+        <tbody>${data.map((r,i)=>`<tr style="background:${i%2===0?'#111318':'#181b23'}">${r.map(v=>`<td style="${tdS}">${v??''}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>`;
+    };
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>FactoryOS Report</title>
+    <style>@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style>
+    </head><body style="background:#0c0e13;color:#dde2ef;font-family:Barlow,sans-serif;padding:32px;margin:0">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="width:8px;height:8px;border-radius:50%;background:#00c8f0"></div>
+        <span style="font-family:monospace;font-size:12px;letter-spacing:.15em;color:#00c8f0">FACTORY OS — PRODUCTION REPORT</span>
+      </div>
+      <div style="font-size:11px;color:#7d849a;margin-bottom:4px;font-family:monospace">Period: ${from} to ${to}</div>
+      <div style="font-size:11px;color:#7d849a;margin-bottom:28px;font-family:monospace">Group: ${groupLabel} · Category: ${catLabel}${filterVal?' · Filter: '+filterVal:''} · ${filtered.length} records</div>
+      ${makeTable(summary,'Summary')}
+      ${makeTable(detail,'Detail log')}
+    </body></html>`;
+    const w=window.open('','_blank');
+    if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);}
+  };
+
+  const showFilter=groupBy==='per_machine'||groupBy==='per_operator';
+  const filterOptions=groupBy==='per_machine'?machineIds:operatorNames;
+
+  return (
+    <Modal onClose={onClose} title="Download report" wide>
+      <p className="modal-note">Select a date range, grouping, and category. Download as CSV (Excel/Sheets) or PDF.</p>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem'}}>
+        <div className="field" style={{marginBottom:0}}><label>From</label><input type="date" className="mi" value={from} onChange={e=>setFrom(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>To</label><input type="date" className="mi" value={to} onChange={e=>setTo(e.target.value)}/></div>
+      </div>
+      <div className="field">
+        <label>Group by</label>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+          {[['all_machines','All Machines'],['all_operators','All Operators'],['per_machine','Per Machine'],['per_operator','Per Operator']].map(([v,l])=>(
+            <div key={v} className={`role-chip${groupBy===v?' active':''}`} onClick={()=>{setGroupBy(v);setFilterVal('');}}>{l}</div>
+          ))}
+        </div>
+      </div>
+      {showFilter&&(
+        <div className="field">
+          <label>{groupBy==='per_machine'?'Select machine':'Select operator'}</label>
+          <select className="mi" value={filterVal} onChange={e=>setFilterVal(e.target.value)}>
+            <option value="">— All —</option>
+            {filterOptions.map(v=><option key={v} value={v}>{v}</option>)}
+          </select>
+        </div>
+      )}
+      <div className="field">
+        <label>Category</label>
+        <div className="role-chips">
+          {[['all','All'],['production','Production'],['shortfall','Shortfalls'],['breakdown','Breakdowns']].map(([v,l])=>(
+            <div key={v} className={`role-chip${filterCat===v?' active':''}`} onClick={()=>setFilterCat(v)}>{l}</div>
+          ))}
+        </div>
+      </div>
+      <div className="info-box neutral" style={{marginBottom:'1rem'}}>{filtered.length} record{filtered.length!==1?'s':''} found</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+        <button className="add-btn" style={{background:'var(--accent3)',color:'#000',opacity:filtered.length?1:0.4,padding:'10px'}} onClick={()=>{if(filtered.length)downloadCSV();}}>↓ EXCEL / CSV</button>
+        <button className="add-btn" style={{background:'var(--accent)',color:'#000',opacity:filtered.length?1:0.4,padding:'10px'}} onClick={()=>{if(filtered.length)downloadPDF();}}>↓ PDF</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Breakdown History Card ───────────────────────────────────
+function BreakdownHistoryModal({alerts,machines,onClose}) {
+  const [selM,setSelM]=useState('all');
+  const uniqueMachines=Object.values(machines.reduce((acc,m)=>{ if(!acc[m.id]) acc[m.id]={id:m.id,name:m.name}; return acc; },{}));
+
+  const rowsForMachine=machineName=>{
+    const bds=alerts.filter(a=>a.data&&a.data.category==='breakdown'&&a.data.machine===machineName).slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    const rps=alerts.filter(a=>a.data&&a.data.category==='repair'&&a.data.machine===machineName).slice().sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    const used=new Set();
+    return bds.map((bd,i)=>{
+      let matched=null;
+      for(let j=0;j<rps.length;j++){
+        if(used.has(j)) continue;
+        if(new Date(rps[j].ts)>=new Date(bd.ts)){ matched=rps[j]; used.add(j); break; }
+      }
+      const hours=matched?((new Date(matched.ts)-new Date(bd.ts))/3600000):null;
+      return {
+        sr:i+1, date:bd.date, nature:bd.data.reason||'',
+        action:matched?matched.data.reason:'', from:bd.time, to:matched?matched.time:'',
+        hours:hours!==null?hours.toFixed(1):'', remarks:matched?'':'Breakdown ongoing'
+      };
+    });
+  };
+
+  const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const buildCard=(machineName,machineId,rows,pageIdx,totalPages)=>{
+    const MIN_ROWS=7;
+    const dataRows=rows.map(r=>`
+      <tr>
+        <td style="text-align:center">${r.sr}</td>
+        <td style="text-align:center">${esc(r.date)}</td>
+        <td>${esc(r.nature)}</td>
+        <td>${esc(r.action)}</td>
+        <td style="text-align:center">${esc(r.from)}</td>
+        <td style="text-align:center">${esc(r.to)}</td>
+        <td style="text-align:center">${esc(r.hours)}</td>
+        <td>${esc(r.remarks)}</td>
+      </tr>`).join('');
+    const blankCount=Math.max(0,MIN_ROWS-rows.length);
+    const blankRows=Array.from({length:blankCount}).map(()=>`<tr>${Array.from({length:8}).map(()=>'<td>&nbsp;</td>').join('')}</tr>`).join('');
+    return `
+    <div class="card">
+      <table class="hdr">
+        <tr>
+          <td class="logo" rowspan="6">P<span>E</span>W</td>
+          <td class="company" rowspan="3">PUNJAB ENGINEERING WORKS<br/><span class="sub">(JAIPUR SOUTH)</span></td>
+          <td class="dk">Doc. No.</td><td class="dv">PEW/MNT/F04</td>
+        </tr>
+        <tr><td class="dk">Page No.</td><td class="dv">Page ${pageIdx} of ${totalPages}</td></tr>
+        <tr><td class="dk">Issue No.</td><td class="dv">01</td></tr>
+        <tr>
+          <td class="title" rowspan="3">Machine Breakdown Record<br/><span class="sub">(History Card)</span></td>
+          <td class="dk">Issue Date</td><td class="dv">Apr. 01, 2021</td>
+        </tr>
+        <tr><td class="dk">Rev. No.</td><td class="dv">00</td></tr>
+        <tr><td class="dk">Rev. Date</td><td class="dv">----</td></tr>
+      </table>
+      <div class="mline"><span>Name of Machine: <b>${esc(machineName)}</b></span><span>Identification No.: <b>${esc(machineId)}</b></span></div>
+      <table class="main">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:34px">S.<br/>No.</th>
+            <th rowspan="2" style="width:80px">Date</th>
+            <th rowspan="2">Nature of Breakdown</th>
+            <th rowspan="2">Action taken</th>
+            <th colspan="2">Breakdown time</th>
+            <th rowspan="2" style="width:70px">Total Breakdown Hours</th>
+            <th rowspan="2" style="width:90px">Remarks</th>
+          </tr>
+          <tr><th style="width:50px">From</th><th style="width:50px">To</th></tr>
+        </thead>
+        <tbody>${dataRows}${blankRows}</tbody>
+      </table>
+    </div>`;
+  };
+
+  const download=()=>{
+    const targets=selM==='all'?uniqueMachines:uniqueMachines.filter(m=>m.id===selM);
+    if(!targets.length) return;
+    const cards=targets.map((m,i)=>buildCard(m.name,m.id,rowsForMachine(m.name),i+1,targets.length)).join('');
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Breakdown History Card</title>
+    <style>
+      *{box-sizing:border-box}
+      body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:0;padding:24px;background:#fff}
+      .card{border:5px solid #1565c0;padding:10px;max-width:1000px;margin:0 auto 24px;page-break-after:always}
+      .card:last-child{page-break-after:auto}
+      table.hdr{width:100%;border-collapse:collapse;margin-bottom:14px}
+      table.hdr td{border:1px solid #000;padding:4px 8px;font-size:12px;vertical-align:middle}
+      .logo{width:90px;text-align:center;font-size:26px;font-weight:bold;color:#1565c0;font-family:'Arial Black',sans-serif;letter-spacing:2px}
+      .logo span{color:#000}
+      .company{font-weight:bold;font-size:15px;text-align:center}
+      .title{font-weight:bold;font-size:13px;text-align:center}
+      .sub{font-weight:normal;font-size:12px}
+      .dk{font-size:11px;width:80px}
+      .dv{font-size:11px;width:130px}
+      .mline{display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;padding:0 4px}
+      table.main{width:100%;border-collapse:collapse}
+      table.main th,table.main td{border:1px solid #000;padding:6px;font-size:11px}
+      table.main th{background:#f0f0f0;font-weight:bold;text-align:center}
+      table.main td{height:26px;vertical-align:top}
+      @media print{.card{page-break-after:always}}
+    </style>
+    </head><body>${cards}</body></html>`;
+    const w=window.open('','_blank');
+    if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);}
+  };
+
+  return (
+    <Modal onClose={onClose} title="Breakdown history card">
+      <p className="modal-note">Generates a printable Machine Breakdown Record (History Card), in the same format as your maintenance team's existing template, using the breakdown and repair entries logged in the app.</p>
+      <div className="field"><label>Machine</label>
+        <select className="mi" value={selM} onChange={e=>setSelM(e.target.value)}>
+          <option value="all">— All machines (one card each) —</option>
+          {uniqueMachines.map(m=><option key={m.id} value={m.id}>{m.id} · {m.name}</option>)}
+        </select>
+      </div>
+      <button className="add-btn" style={{background:'var(--accent)',color:'#000'}} onClick={download}>↓ DOWNLOAD HISTORY CARD</button>
+    </Modal>
+  );
+}
+
+// ── Attendance Modal ───────────────────────────────────────
+function AttendanceModal({users,attendance,setAttendance,onClose}) {
+  const [date,setDate]=useState(todayStr());
+  const operators=users.filter(u=>u.role==='operator');
+  const dayRecord=attendance[date]||{};
+  const [msg,setMsg]=useState('');
+
+  const setStatus=async(username,status)=>{
+    const updatedDay={...dayRecord,[username]:status};
+    const updated={...attendance,[date]:updatedDay};
+    setAttendance(updated);
+    const ok=await fb.set('attendance',updated);
+    setMsg(ok?'Saved.':'Saved locally but Firebase sync failed.');
+  };
+
+  const STATUS_OPTS=[['present','Present'],['half','Half day'],['absent','Absent']];
+  const STATUS_COLOR={present:'var(--accent3)',half:'var(--warn)',absent:'var(--danger)'};
+
+  return (
+    <Modal onClose={onClose} title="Daily attendance" wide>
+      <p className="modal-note">Mark each operator's attendance for the day. This feeds the wage register — daily wage is paid in full for Present, half for Half day, and nothing for Absent.</p>
+      <div className="field"><label>Date</label><input type="date" className="mi" value={date} onChange={e=>setDate(e.target.value)}/></div>
+      {!operators.length?<div className="empty">No operator accounts — add via Manage users</div>:(
+        <div className="pj-list">
+          {operators.map(o=>{
+            const status=dayRecord[o.username];
+            return (
+              <div className="pj-row" key={o.username}>
+                <div className="pj-info">
+                  <div className="pj-name">{o.name}</div>
+                  <div className="pj-meta">₹{o.dailyWage||0}/day</div>
+                </div>
+                <div style={{display:'flex',gap:4,flexShrink:0}}>
+                  {STATUS_OPTS.map(([v,l])=>(
+                    <button key={v} className="small-btn" style={status===v?{background:STATUS_COLOR[v],color:'#000',borderColor:'transparent'}:{}} onClick={()=>setStatus(o.username,v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {msg&&<div className="save-msg">{msg}</div>}
+    </Modal>
+  );
+}
+
+// ── Wage Register Modal ────────────────────────────────────
+function WageRegisterModal({users,attendance,alerts,onClose}) {
+  const [from,setFrom]=useState(todayStr());
+  const [to,setTo]=useState(todayStr());
+  const operators=users.filter(u=>u.role==='operator');
+
+  const dateRange=()=>{
+    const out=[];
+    let d=new Date(from+'T00:00:00');
+    const end=new Date(to+'T00:00:00');
+    while(d<=end){ out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`); d.setDate(d.getDate()+1); }
+    return out;
+  };
+  const days=dateRange();
+
+  // OT pay comes from production alerts logged at shift-complete (category 'production' or 'shortfall'),
+  // which already carry otPay/otHours computed at the moment the shift was completed.
+  const otByOperatorDate={};
+  alerts.forEach(a=>{
+    if(!a.data||!(a.data.category==='production'||a.data.category==='shortfall')) return;
+    if(a.data.otPay===undefined||!a.data.operator) return;
+    const key=a.data.operator+'|'+(a.date||'');
+    otByOperatorDate[key]=(otByOperatorDate[key]||0)+(a.data.otPay||0);
+  });
+
+  const rows=operators.map(o=>{
+    let presentDays=0,halfDays=0,absentDays=0,basePay=0,otPay=0;
+    days.forEach(d=>{
+      const status=(attendance[d]||{})[o.username];
+      if(status==='present'){presentDays++;basePay+=o.dailyWage||0;}
+      else if(status==='half'){halfDays++;basePay+=(o.dailyWage||0)/2;}
+      else if(status==='absent'){absentDays++;}
+      const key=o.name+'|'+d;
+      otPay+=otByOperatorDate[key]||0;
+    });
+    return {username:o.username,name:o.name,dailyWage:o.dailyWage||0,presentDays,halfDays,absentDays,basePay:Math.round(basePay*100)/100,otPay:Math.round(otPay*100)/100,total:Math.round((basePay+otPay)*100)/100};
+  });
+
+  const grandTotal=rows.reduce((s,r)=>s+r.total,0);
+
+  const toCSV=()=>{
+    const header=['Operator','Daily Wage','Present Days','Half Days','Absent Days','Base Pay','OT Pay','Total Pay'];
+    const body=rows.map(r=>[r.name,r.dailyWage,r.presentDays,r.halfDays,r.absentDays,r.basePay,r.otPay,r.total]);
+    const all=[header,...body,[],['','','','','','','Grand total',Math.round(grandTotal*100)/100]];
+    const csv=all.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const el=document.createElement('a');
+    el.href=url; el.download=`wage-register-${from}-to-${to}.csv`; el.click(); URL.revokeObjectURL(url);
+  };
+
+  return (
+    <Modal onClose={onClose} title="Wage register" wide>
+      <p className="modal-note">Base pay comes from attendance × daily wage. Overtime pay is auto-calculated whenever a completed shift exceeds its target: extra units ÷ units-per-hour rate = OT hours, paid at the operator's plain hourly rate (daily wage ÷ 8).</p>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem'}}>
+        <div className="field" style={{marginBottom:0}}><label>From</label><input type="date" className="mi" value={from} onChange={e=>setFrom(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label>To</label><input type="date" className="mi" value={to} onChange={e=>setTo(e.target.value)}/></div>
+      </div>
+      {!operators.length?<div className="empty">No operator accounts yet</div>:(
+        <div className="pj-list">
+          {rows.map(r=>(
+            <div className="pj-row" key={r.username} style={{alignItems:'flex-start'}}>
+              <div className="pj-info">
+                <div className="pj-name">{r.name}</div>
+                <div className="pj-meta">{r.presentDays}P · {r.halfDays}H · {r.absentDays}A &nbsp;·&nbsp; base ₹{r.basePay} + OT ₹{r.otPay}</div>
+              </div>
+              <div className="pj-target" style={{fontSize:13}}>₹{r.total}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="info-box success" style={{marginTop:'1rem',marginBottom:'1rem'}}>Grand total: <b>₹{Math.round(grandTotal*100)/100}</b> across {rows.length} operator{rows.length!==1?'s':''}, {days.length} day{days.length!==1?'s':''}</div>
+      <button className="add-btn" style={{background:'var(--accent3)',color:'#000'}} onClick={toCSV}>↓ DOWNLOAD WAGE REGISTER (CSV)</button>
+    </Modal>
+  );
+}
+
+
+function AssignmentBanner({user,machines,castingTypes,viewShift}) {
+  if(user.role!=='operator') return null;
+  const mine=machines.map(m=>withShift(m,viewShift)).filter(m=>m.assignedOperator===user.username);
+  if(!mine.length) return null;
+  return (
+    <div>
+      <div className="sec-hdr">
+        <div className="sec-title">Your assignments{mine.length>1?` (${mine.length} machines)`:''}</div>
+      </div>
+      <div className="pj-list">
+        {mine.map(m=>{
+          const {ct,stage,route}=resolveStage(castingTypes,m);
+          const target=m.setupApplied&&m.adjustedTarget?m.adjustedTarget:stage?stage.target:null;
+          return (
+            <div className="pj-row" key={m.id}>
+              <div className="pj-info"><div className="pj-name">{m.id} · {m.name}</div><div className="pj-meta">{ct&&stage?`${ct.name} — ${route?route.name:''} (${stage.name}) — target ${target}/shift`:'No job set'}</div></div>
+              <div className="pj-target" style={{color:m.shiftComplete?(m.prodCount>=target?'var(--accent3)':'var(--danger)'):'var(--text2)'}}>{m.prodCount}/{target??'—'}</div>
+            </div>
+          );
+        })}
+      </div>
+      {mine.length>1&&<div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)',marginTop:6}}>You're assigned to multiple machines this shift — log production separately on each.</div>}
+    </div>
+  );
+}
+
+// ── Dashboard ──────────────────────────────────────────────
+function Dashboard({currentUser,users,setUsers,onLogout}) {
+  const [machines,setMachines]=useState(initMachines);
+  const [machinesLoaded,setMachinesLoaded]=useState(false);
+  const [viewShift,setViewShift]=useState(currentUser.shift||'day');
+  const [filterMode,setFilterMode]=useState('all');
+  const [selectedMachine,setSelectedMachine]=useState(null);
+  const [alerts,setAlerts]=useState([]);
+  const [castingTypes,setCastingTypes]=useState(DEFAULT_CASTING_TYPES);
+  const [wip,setWip]=useState({});
+  const [stockLog,setStockLog]=useState([]);
+  const [attendance,setAttendance]=useState({});
+  const [sessions,setSessions]=useState({});
+  const [clock,setClock]=useState(new Date());
+  const [showUser,setShowUser]=useState(false);
+  const [showProd,setShowProd]=useState(false);
+  const [showAssign,setShowAssign]=useState(false);
+  const [showOnline,setShowOnline]=useState(false);
+  const [showDownload,setShowDownload]=useState(false);
+  const [showBreakdownHistory,setShowBreakdownHistory]=useState(false);
+  const [showStock,setShowStock]=useState(false);
+  const [showAttendance,setShowAttendance]=useState(false);
+  const [showWageRegister,setShowWageRegister]=useState(false);
+  const [shiftCompleteData,setShiftCompleteData]=useState(null);
+  const [logProgressData,setLogProgressData]=useState(null);
+  const [breakdownData,setBreakdownData]=useState(null);
+  const [lineInspectionData,setLineInspectionData]=useState(null);
+  const [repairData,setRepairData]=useState(null);
+  const [decisionData,setDecisionData]=useState(null);
+  const [settingDecisionData,setSettingDecisionData]=useState(null);
+  const sid=useRef('sess_'+Math.random().toString(36).slice(2)+Date.now().toString(36));
+  const isAdmin=currentUser.role==='admin'||currentUser.role==='supervisor';
+
+  useEffect(()=>{
+    Promise.all([
+      fb.get('machines').then(v=>v||initMachines()),
+      fb.get('alerts').then(v=>v||[]),
+      fb.get('casting_types').then(v=>normalizeCastingTypes(v||DEFAULT_CASTING_TYPES)),
+      fb.get('wip').then(v=>v||{}),
+      fb.get('stock_log').then(v=>v||[]),
+      fb.get('attendance').then(v=>v||{}),
+    ]).then(([m,a,ct,w,sl,at])=>{
+      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setMachinesLoaded(true);
+    });
+    const unM=fb.sub('machines',v=>{if(v)setMachines(v);});
+    const unA=fb.sub('alerts',v=>{if(v)setAlerts(v);});
+    const unCt=fb.sub('casting_types',v=>{if(v)setCastingTypes(normalizeCastingTypes(v));});
+    const unW=fb.sub('wip',v=>{if(v)setWip(v);});
+    const unSL=fb.sub('stock_log',v=>{if(v)setStockLog(v);});
+    const unAt=fb.sub('attendance',v=>{if(v)setAttendance(v);});
+    const unS=fb.sub('sessions',v=>{if(v)setSessions(v);});
+    return()=>{unM();unA();unCt();unW();unSL();unAt();unS();};
+  },[]);
+
+  useEffect(()=>{
+    if(!machinesLoaded) return;
+    const t=setTimeout(()=>fb.set('machines',machines),600);
+    return()=>clearTimeout(t);
+  },[machines,machinesLoaded]);
+
+  useEffect(()=>{
+    const info={username:currentUser.username,name:currentUser.name,role:currentUser.role,shift:viewShift};
+    const beat=async()=>{
+      const s=await fb.get('sessions').then(v=>v||{});
+      const now=Date.now();
+      Object.keys(s).forEach(id=>{if(now-s[id].lastSeen>120000)delete s[id];});
+      s[sid.current]={...info,lastSeen:now};
+      await fb.set('sessions',s);
+    };
+    beat();
+    const t=setInterval(beat,30000);
+    return()=>{
+      clearInterval(t);
+      fb.get('sessions').then(s=>{if(s){delete s[sid.current];fb.set('sessions',s);}});
+    };
+  },[currentUser,viewShift]);
+
+  useEffect(()=>{const t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t);},[]);
+
+  useEffect(()=>{
+    if(!machinesLoaded) return;
+    const t=setInterval(()=>{
+      setMachines(prev=>prev.map(m=>{
+        if(m.shift==='cnc_vmc'){
+          if(!m.shifts) return m;
+          const bump=slot=>(slot&&slot.status==='running')?{...slot,progress:Math.min(100,slot.progress+rnd(0,2)),output:Math.min(m.target,slot.output+rnd(0,2))}:slot;
+          return {...m,shifts:{day:bump(m.shifts.day),night:bump(m.shifts.night)}};
+        }
+        if(m.status!=='running') return m;
+        return {...m,progress:Math.min(100,m.progress+rnd(0,2)),output:Math.min(m.target,m.output+rnd(0,2))};
+      }));
+    },3500);
+    return()=>clearInterval(t);
+  },[machinesLoaded]);
+
+  const writeAlerts=newAlerts=>{ setAlerts(newAlerts); fb.set('alerts',newAlerts); };
+  const pushAlert=(type,msg,data=null)=>{ const a={id:Date.now(),type,msg,data,time:nowStr(),date:todayStr(),ts:fullTs()}; writeAlerts([a,...alerts].slice(0,200)); };
+  const removeAlert=id=>writeAlerts(alerts.filter(x=>x.id!==id));
+  const clearAllAlerts=()=>writeAlerts([]);
+
+  const setIdle=(id,shiftKey)=>{
+    const updated=patchMachineShift(machines,id,shiftKey,{status:'idle',job:null,progress:0});
+    setMachines(updated); fb.set('machines',updated);
+  };
+
+  const handleRepairSubmit=assessment=>{
+    if(!repairData) return;
+    const {machine:m,shiftKey}=repairData;
+    const updated=patchMachineShift(machines,m.id,shiftKey,{status:'idle',progress:0});
+    setMachines(updated); fb.set('machines',updated);
+    const a={id:Date.now(),type:'info',msg:`✓ ${m.name} (${shiftKey} shift) marked repaired by ${currentUser.name} — ${assessment}`,data:{machine:m.name,machineId:m.id,shiftKey,operator:m.operator,reason:assessment,category:'repair',decidedBy:currentUser.name},time:nowStr(),date:todayStr(),ts:fullTs()};
+    writeAlerts([a,...alerts].slice(0,200));
+    setRepairData(null);
+  };
+
+  const handleBreakdownSubmit=reason=>{
+    if(!breakdownData) return;
+    const {machine:m,shiftKey}=breakdownData;
+    const updated=patchMachineShift(machines,m.id,shiftKey,{status:'breakdown'});
+    setMachines(updated); fb.set('machines',updated);
+    const a={id:Date.now(),type:'danger',msg:`⚠ ${m.name} breakdown — ${reason}`,data:{machine:m.name,machineId:m.id,shiftKey,operator:m.operator,reason,category:'breakdown'},time:nowStr(),date:todayStr(),ts:fullTs()};
+    writeAlerts([a,...alerts].slice(0,200));
+    setBreakdownData(null);
+  };
+
+  const handleLogProgress=({newPieces,reworkPieces,castingDefects,machiningDefects,total})=>{
+    if(!logProgressData) return;
+    const {machine:m,shiftKey}=logProgressData;
+    const updated=patchMachineShift(machines,m.id,shiftKey,{prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
+    setMachines(updated); fb.set('machines',updated);
+    setLogProgressData(null);
+  };
+
+  const handleSubmitSettingInspection=rows=>{
+    if(!lineInspectionData) return;
+    const {machine:m,shiftKey}=lineInspectionData;
+    const updated=patchMachineShift(machines,m.id,shiftKey,{lineInspection:rows,settingApprovalStatus:'pending',settingRejectionNote:null});
+    setMachines(updated); fb.set('machines',updated);
+    const a={id:Date.now(),type:'setting_review',msg:null,data:{machine:m.name,operator:m.operator,machineId:m.id,shiftKey,rows,category:'setting_review',status:'pending'},time:nowStr(),date:todayStr(),ts:fullTs()};
+    writeAlerts([a,...alerts].slice(0,200));
+    setLineInspectionData(null);
+  };
+
+  const handleSettingDecision=note=>{
+    if(!settingDecisionData) return;
+    const {alertId,decision}=settingDecisionData;
+    const alert=alerts.find(x=>x.id===alertId);
+    if(!alert||!alert.data) return;
+    const {machineId,shiftKey}=alert.data;
+    const updated=patchMachineShift(machines,machineId,shiftKey,{
+      settingApproved:decision==='approved',
+      settingApprovalStatus:decision,
+      settingRejectionNote:decision==='disapproved'?note:null
+    });
+    setMachines(updated); fb.set('machines',updated);
+    const newAlerts=alerts.map(a=>a.id===alertId&&a.data?{...a,data:{...a.data,status:decision,decisionNote:note,decidedBy:currentUser.name}}:a);
+    setAlerts(newAlerts); fb.set('alerts',newAlerts);
+    setSettingDecisionData(null);
+  };
+
+  const handleShiftComplete=({newPieces,reworkPieces,castingDefects,machiningDefects,total,consumed,reason})=>{
+    if(!shiftCompleteData) return;
+    const {machine:m,pj,shiftKey}=shiftCompleteData;
+    const isBelow=total<pj.target;
+    const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
+    setMachines(updated); fb.set('machines',updated);
+
+    const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
+    const route=ct&&m.routeId?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
+    const nodeId=m.nodeId;
+    if(ct&&route&&nodeId){
+      const logEntries=[];
+      let updatedTypes=castingTypes;
+      let updatedWip={...wip};
+
+      // Coerce to number everywhere — Firebase JSON round-trips can turn numeric nodeIds in
+      // nested arrays into strings, causing strict-equality comparisons to silently fail.
+      const nodeIdN=Number(nodeId);
+      const stepIdx=route.steps.findIndex(s=>
+        s.type==='fixed'?Number(s.nodeId)===nodeIdN:s.nodeIds.map(Number).includes(nodeIdN)
+      );
+      if(stepIdx===-1){
+        // Couldn't match this node to any step in the route — data mismatch, bail out safely
+        // rather than silently writing garbage WIP values.
+        console.warn('handleShiftComplete: nodeId',nodeIdN,'not found in route steps',route.steps);
+        writeAlerts([{id:Date.now(),type:'warn',msg:`⚠ ${m.name}: shift marked complete but WIP could not be updated — route step mismatch. Check Casting types.`,time:nowStr(),date:todayStr(),ts:fullTs()},...alerts].slice(0,200));
+        setShiftCompleteData(null);
+        return;
+      }
+      const step=route.steps[stepIdx];
+      const isFirstStep=stepIdx===0;
+      const isLastStep=stepIdx===route.steps.length-1;
+      const node=ct.nodes.find(n=>Number(n.nodeId)===nodeIdN);
+      const nodeLabel=node?node.name:`node ${nodeIdN}`;
+      const gateKeyFor=floatStep=>`gate:${floatStep.nodeIds[0]}`;
+      const floatDoneKeyFor=(floatStep,nid)=>`floatdone:${floatStep.nodeIds[0]}:${nid}`;
+
+      // INPUT: pull consumed pieces from wherever this step's work comes from.
+      if(isFirstStep){
+        updatedTypes=updatedTypes.map(c=>c.id===ct.id?{...c,rawBalance:Math.round((c.rawBalance-consumed)*100)/100}:c);
+      } else if(step.type==='fixed'){
+        const key=wipKey(ct.id,nodeId);
+        updatedWip[key]=Math.max(0,Math.round(((updatedWip[key]||0)-consumed)*100)/100);
+      } else {
+        // Floating step: every node in the group draws from the SAME shared gate pool — it is not
+        // decremented per node, since the same batch of pieces is available to whichever floating
+        // operation picks it up. What's tracked separately is each node's own completed count.
+        const gateKey=wipKey(ct.id,gateKeyFor(step));
+        const doneKey=wipKey(ct.id,floatDoneKeyFor(step,nodeId));
+        updatedWip[doneKey]=Math.round(((updatedWip[doneKey]||0)+consumed)*100)/100;
+        // Gate pool itself only shrinks once EVERY node in the group has cleared a piece, since that's
+        // the point a piece is no longer "available" to any floating operation — handled below.
+      }
+      logEntries.push({id:Date.now()+1,type:'out',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty:consumed,machine:m.name,stageLabel:`${route.name} · ${nodeLabel}`,note:`${total} good (${newPieces} new, ${reworkPieces} rework)`,date:todayStr(),time:nowStr(),ts:fullTs()});
+
+      // OUTPUT: good pieces (new + rework) move forward.
+      if(isLastStep){
+        // Nothing further — this output is finished. (No WIP write needed.)
+      } else if(step.type==='fixed'){
+        const nextStep=route.steps[stepIdx+1];
+        const nextKey=nextStep.type==='fixed'?wipKey(ct.id,nextStep.nodeId):wipKey(ct.id,gateKeyFor(nextStep));
+        if(total>0) updatedWip[nextKey]=Math.round(((updatedWip[nextKey]||0)+total)*100)/100;
+      } else {
+        // Completing a floating node doesn't immediately push pieces forward — a piece only moves on
+        // once EVERY node in this floating group has processed it. Recompute the group's completed
+        // count as the minimum across all its nodes; any newly-cleared amount (beyond what was already
+        // released) advances to the next step and is removed from the gate pool.
+        const groupNodeIds=step.nodeIds;
+        const gateKey=wipKey(ct.id,gateKeyFor(step));
+        const doneCounts=groupNodeIds.map(nid=>updatedWip[wipKey(ct.id,floatDoneKeyFor(step,nid))]||0);
+        const minDone=Math.min(...doneCounts);
+        const releasedKey=wipKey(ct.id,`floatreleased:${gateKeyFor(step)}`);
+        const alreadyReleased=updatedWip[releasedKey]||0;
+        const newlyReleased=Math.max(0,Math.round((minDone-alreadyReleased)*100)/100);
+        if(newlyReleased>0){
+          updatedWip[releasedKey]=minDone;
+          updatedWip[gateKey]=Math.max(0,Math.round(((updatedWip[gateKey]||0)-newlyReleased)*100)/100);
+          if(!isLastStep){
+            const nextStep=route.steps[stepIdx+1];
+            const nextKey=nextStep.type==='fixed'?wipKey(ct.id,nextStep.nodeId):wipKey(ct.id,gateKeyFor(nextStep));
+            updatedWip[nextKey]=Math.round(((updatedWip[nextKey]||0)+newlyReleased)*100)/100;
+          }
+        }
+      }
+
+      // Defects are scrapped — logged for records, removed from the system, do not proceed.
+      const defectTotal=castingDefects+machiningDefects;
+      if(defectTotal>0){
+        if(castingDefects>0) logEntries.push({id:Date.now()+2,type:'defect',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty:castingDefects,machine:m.name,stageLabel:`${route.name} · ${nodeLabel} · Casting defect`,note:'Scrapped — foundry fault',date:todayStr(),time:nowStr(),ts:fullTs()});
+        if(machiningDefects>0) logEntries.push({id:Date.now()+3,type:'defect',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty:machiningDefects,machine:m.name,stageLabel:`${route.name} · ${nodeLabel} · Machining defect`,note:'Scrapped — machining fault',date:todayStr(),time:nowStr(),ts:fullTs()});
+      }
+
+      setCastingTypes(updatedTypes); fb.set('casting_types',updatedTypes);
+      setWip(updatedWip); fb.set('wip',updatedWip);
+      const updatedLog=[...logEntries,...stockLog].slice(0,500);
+      setStockLog(updatedLog); fb.set('stock_log',updatedLog);
+    }
+
+    // OT pay: extra units above target, converted to hours via the stage's units/hour rate,
+    // paid at the operator's plain hourly rate (dailyWage/8). Only counted once shift is complete.
+    const opUser=users.find(u=>u.username===m.assignedOperator)||users.find(u=>u.name===m.operator);
+    const {otHours,otPay}=calcOtPay(total,pj.target,pj.ratePerHour,opUser?opUser.dailyWage:0);
+
+    const a={
+      id:Date.now(),
+      type:isBelow?'shortfall':'info',
+      msg:isBelow?null:`✓ ${m.name} (${shiftKey} shift): "${pj.name}" — ${total} units (${newPieces} new, ${reworkPieces} rework)${(castingDefects+machiningDefects)>0?` · ${castingDefects+machiningDefects} defects`:''}${otPay?` · OT ₹${otPay}`:''}`,
+      time:nowStr(),date:todayStr(),ts:fullTs(),
+      data:{machine:m.name,operator:m.operator,job:pj.name,produced:total,newPieces,reworkPieces,castingDefects,machiningDefects,target:pj.target,shortfall:isBelow?pj.target-total:0,reason:reason||null,status:isBelow?'pending':null,category:isBelow?'shortfall':'production',otHours,otPay}
+    };
+    writeAlerts([a,...alerts].slice(0,200));
+    setShiftCompleteData(null);
+  };
+
+
+  const handleDecisionSubmit=note=>{
+    if(!decisionData) return;
+    const {alertId,decision}=decisionData;
+    const newAlerts=alerts.map(a=>a.id===alertId&&a.data?{...a,data:{...a.data,status:decision,decisionNote:note,decidedBy:currentUser.name}}:a);
+    setAlerts(newAlerts);
+    fb.set('alerts',newAlerts);
+    setDecisionData(null);
+  };
+
+  const visible=machines.filter(m=>m.shift===SHIFT_CFG[viewShift].shiftKey).map(m=>withShift(m,viewShift));
+  const filtered=filterMode==='all'?visible:visible.filter(m=>m.status===filterMode);
+  const running=visible.filter(m=>m.status==='running');
+  const maxTarget=Math.max(...running.map(m=>m.target),1);
+  const stats={
+    run:visible.filter(m=>m.status==='running').length,
+    idle:visible.filter(m=>m.status==='idle').length,
+    down:visible.filter(m=>m.status==='breakdown').length,
+    eff:visible.length?Math.round(visible.reduce((s,m)=>s+(m.output/m.target*100),0)/visible.length):0
+  };
+  const cfg=SHIFT_CFG[viewShift];
+  const rawSelectedM=machines.find(x=>x.id===selectedMachine);
+  const selectedM=rawSelectedM?withShift(rawSelectedM,viewShift):null;
+  const overviewCounts={day:5,night:5,manual:machines.filter(m=>m.shift==='manual').length};
+
+  if(!machinesLoaded) return <div className="loading-spin">Loading FactoryOS…<div className="loading-hint">Connecting to Firebase. If this takes more than a few seconds, ensure Firestore rules allow read/write.</div></div>;
+
+  return (
+    <div className="dashboard">
+      {showUser&&<UserModal users={users} setUsers={setUsers} currentUser={currentUser} onClose={()=>setShowUser(false)}/>}
+      {showProd&&<CastingTypesModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} onClose={()=>setShowProd(false)}/>}
+      {showAssign&&<AssignModal machines={machines} setMachines={setMachines} users={users} castingTypes={castingTypes} wip={wip} onClose={()=>setShowAssign(false)}/>}
+      {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
+      {showDownload&&<DownloadModal alerts={alerts} onClose={()=>setShowDownload(false)}/>}
+      {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
+      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} onClose={()=>setShowStock(false)}/>}
+      {showAttendance&&<AttendanceModal users={users} attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
+      {showWageRegister&&<WageRegisterModal users={users} attendance={attendance} alerts={alerts} onClose={()=>setShowWageRegister(false)}/>}
+      {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} onSubmit={handleShiftComplete} onClose={()=>setShiftCompleteData(null)}/>}
+      {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
+      {breakdownData&&<BreakdownModal machine={breakdownData.machine} onSubmit={handleBreakdownSubmit} onClose={()=>setBreakdownData(null)}/>}
+      {lineInspectionData&&<LineInspectionModal machine={lineInspectionData.machine} onSubmit={handleSubmitSettingInspection} onClose={()=>setLineInspectionData(null)}/>}
+      {repairData&&<RepairAssessmentModal machine={repairData.machine} breakdownReason={(alerts.find(a=>a.data&&a.data.category==='breakdown'&&a.data.machine===repairData.machine.name)||{}).data?.reason} onSubmit={handleRepairSubmit} onClose={()=>setRepairData(null)}/>}
+      {decisionData&&(()=>{const a=alerts.find(x=>x.id===decisionData.alertId); return a&&a.data?<DecisionModal alertData={a.data} decision={decisionData.decision} onSubmit={handleDecisionSubmit} onClose={()=>setDecisionData(null)}/>:null;})()}
+      {settingDecisionData&&(()=>{const a=alerts.find(x=>x.id===settingDecisionData.alertId); return a&&a.data?<SettingDecisionModal alertData={a.data} decision={settingDecisionData.decision} onSubmit={handleSettingDecision} onClose={()=>setSettingDecisionData(null)}/>:null;})()}
+
+      <div className="topbar">
+        <div style={{display:'flex',alignItems:'center',gap:'1.25rem',minWidth:0,flexWrap:'wrap'}}>
+          <div className="logo-mark"><div className="logo-dot"></div>FACTORY OS · DEV</div>
+          <div className="shift-tabs">
+            <div className="st-group">
+              <button className={`st-tab t-day${viewShift==='day'?' active':''}`} onClick={()=>setViewShift('day')}><div className="dot"></div>CNC/VMC Day</button>
+              <button className={`st-tab t-night${viewShift==='night'?' active':''}`} onClick={()=>setViewShift('night')}><div className="dot"></div>CNC/VMC Night</button>
+            </div>
+            <div className="st-divider"></div>
+            <div className="st-group">
+              <button className={`st-tab t-manual${viewShift==='manual'?' active':''}`} onClick={()=>setViewShift('manual')}><div className="dot"></div>Manual</button>
+            </div>
+          </div>
+        </div>
+        <div className="topbar-right">
+          <div className="live-clock">{clock.toLocaleTimeString('en-IN',{hour12:false})}</div>
+          <button className="icon-btn" onClick={()=>setShowOnline(true)}>Online</button>
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowDownload(true)}>↓ Report</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowBreakdownHistory(true)}>⚠ Breakdown history</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowProd(true)}>Production jobs</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowAssign(true)}>Assign jobs</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowStock(true)}>Stock</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowAttendance(true)}>Attendance</button>}
+          {isAdmin&&<button className="icon-btn" onClick={()=>setShowWageRegister(true)}>Wages</button>}
+          {currentUser.role==='admin'&&<button className="icon-btn" onClick={()=>setShowUser(true)}>Manage users</button>}
+          <div className="user-badge">
+            <div className="user-avatar" style={{background:AC[currentUser.role]||'#888'}}>{initials(currentUser.name)}</div>
+            <span style={{fontSize:12}}>{currentUser.name} · {currentUser.role}</span>
+          </div>
+          <button className="icon-btn" onClick={onLogout}>Sign out</button>
+        </div>
+      </div>
+
+      <div className="shift-banner" style={{borderBottomColor:`${cfg.color}25`}}>
+        <div className="sb-dot" style={{background:cfg.color,boxShadow:`0 0 6px ${cfg.color}`}}></div>
+        <span style={{fontWeight:500,color:cfg.color}}>{cfg.label}</span>
+        <span style={{color:'var(--text2)'}}>{cfg.time}</span>
+        <span className="sb-status" style={{color:isActive(viewShift)?'var(--accent3)':'var(--text3)'}}>{isActive(viewShift)?'ACTIVE NOW':'NOT ACTIVE'}</span>
+      </div>
+
+      <div className="main-layout">
+        <div className="content-area">
+          <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} viewShift={viewShift}/>
+
+          {isAdmin&&castingTypes.some(s=>s.rawBalance<=s.lowThreshold)&&(
+            <div className="info-box danger" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
+              <span>⚠ Low stock: {castingTypes.filter(s=>s.rawBalance<=s.lowThreshold).map(s=>`${s.name} (${s.rawBalance}${s.unit})`).join(', ')}</span>
+              <button className="small-btn" onClick={()=>setShowStock(true)}>View stock</button>
+            </div>
+          )}
+
+          <div className="stats-row">
+            <div className="stat-card s-run"><div className="stat-label">Running</div><div className="stat-val c-green">{stats.run}</div><div className="stat-sub">machines active</div></div>
+            <div className="stat-card s-idle"><div className="stat-label">Idle</div><div className="stat-val c-amber">{stats.idle}</div><div className="stat-sub">awaiting jobs</div></div>
+            <div className="stat-card s-down"><div className="stat-label">Breakdown</div><div className="stat-val c-red">{stats.down}</div><div className="stat-sub">needs attention</div></div>
+            <div className="stat-card s-eff"><div className="stat-label">Efficiency</div><div className="stat-val c-blue">{stats.eff}%</div><div className="stat-sub">output vs target</div></div>
+          </div>
+
+          <div>
+            <div className="sec-hdr">
+              <div className="sec-title">{viewShift==='manual'?'Manual machines & labour stations':'CNC / VMC machine floor'}</div>
+              <div className="filter-row">
+                {['all','running','idle','breakdown'].map(f=><button key={f} className={`fbtn${filterMode===f?' active':''}`} onClick={()=>setFilterMode(f)}>{f.charAt(0).toUpperCase()+f.slice(1)}</button>)}
+              </div>
+            </div>
+            {!filtered.length?<div className="empty" style={{padding:'2rem'}}>No machines match this filter</div>:(
+              <div className="machine-grid">
+                {filtered.map(m=>{
+                  const {ct,stage,route}=resolveStage(castingTypes,m);
+                  const displayJob=ct&&stage?`${ct.name} — ${stage.name}`:m.job||'—';
+                  const effectiveTarget=stage?(m.setupApplied&&m.adjustedTarget?m.adjustedTarget:stage.target):null;
+                  return (
+                    <div key={m.id} className={`m-card ${m.status}${selectedMachine===m.id?' selected':''}`} onClick={()=>setSelectedMachine(selectedMachine===m.id?null:m.id)}>
+                      <div className="m-row"><span className="m-id">{m.id}</span><div className="m-dot"></div></div>
+                      <div className="m-name">{m.name}</div>
+                      <span className="m-badge" style={{background:BADGE[m.type].bg,color:BADGE[m.type].color}}>{BADGE[m.type].lbl}</span>
+                      <div className="m-job">{displayJob}</div>
+                      {m.assignedOperator&&<div className="m-op">👤 {m.operator}</div>}
+                      <div className="m-prog-bg"><div className="m-prog-fill" style={{width:`${m.progress}%`}}></div></div>
+                      {stage?(
+                        <div className="m-units">{m.prodCount}/{effectiveTarget} units</div>
+                      ):(
+                        <div className="m-units">No job assigned</div>
+                      )}
+                      {stage&&m.shiftComplete&&<span className={`shift-done-tag${m.prodCount>=effectiveTarget?' ok':' low'}`}>{m.prodCount}/{effectiveTarget}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="sec-hdr"><div className="sec-title">Output vs target — running machines</div></div>
+            {!running.length?<div className="empty">No running machines in this shift</div>:(
+              <div className="ob-wrap">
+                {running.map(m=>{
+                  const pct=Math.min(100,Math.round(m.output/m.target*100));
+                  const col=pct>=90?'var(--accent3)':pct>=60?'var(--warn)':'var(--danger)';
+                  return (
+                    <div className="ob-row" key={m.id}>
+                      <div className="ob-label">{m.id}</div>
+                      <div className="ob-track">
+                        <div className="ob-fill" style={{width:`${Math.round(m.output/maxTarget*100)}%`,background:col}}></div>
+                        <div className="ob-target" style={{left:`${Math.round(m.target/maxTarget*100)}%`}}></div>
+                      </div>
+                      <div className="ob-pct">{pct}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="sec-hdr"><div className="sec-title">All shifts overview</div></div>
+            <div className="shift-compare">
+              <div className="sc-hdr"><div></div><div>Shift</div><div>Hours</div><div>Machines</div></div>
+              {['day','night','manual'].map(s=>(
+                <button key={s} className={`sc-row${viewShift===s?' active-view':''}`} onClick={()=>setViewShift(s)}>
+                  <div className="sc-dot" style={{background:SHIFT_CFG[s].color}}></div>
+                  <div className="sc-name">{SHIFT_CFG[s].label.replace(' Shift','').replace('CNC / VMC — ','CNC/VMC ').replace('Manual / Labour','Manual/Labour')}</div>
+                  <div className="sc-time">{SHIFT_CFG[s].time}</div>
+                  <div className="sc-count">{overviewCounts[s]} machines</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sidebar">
+          <div className="sb-sec">
+            <div className="sb-title">Machine detail</div>
+            {!selectedM?<div className="m-detail"><div className="empty">Select a machine</div></div>:(
+              <div className="m-detail">
+                <div className="md-hdr">
+                  <div className="md-id">{selectedM.id}</div>
+                  <span className={`pill${selectedM.status==='running'?' p-run':selectedM.status==='idle'?' p-idle':' p-down'}`}>{selectedM.status.charAt(0).toUpperCase()+selectedM.status.slice(1)}</span>
+                </div>
+                {(()=>{
+                  const {ct:selCt,stage:selStage,route:selRoute}=resolveStage(castingTypes,selectedM);
+                  const selTarget=selStage?(selectedM.setupApplied&&selectedM.adjustedTarget?selectedM.adjustedTarget:selStage.target):null;
+                  return [
+                    ['Name',selectedM.name],
+                    ['Type',BADGE[selectedM.type].lbl],
+                    ['Shift',selectedM.shift==='cnc_vmc'?`CNC/VMC — ${viewShift==='night'?'Night':'Day'}`:'Manual'],
+                    ['Job',selCt&&selStage?`${selCt.name} — ${selRoute?selRoute.name:''} (${selStage.name})`:selectedM.job||'—'],
+                    ['Operator',selectedM.operator],
+                    ['Progress',`${selectedM.progress}%`],
+                    ['Produced',selectedM.shiftComplete?`${selectedM.prodCount} units${selectedM.newPieces!==undefined?` (${selectedM.newPieces} new, ${selectedM.reworkPieces} rework)`:''}`:selectedM.castingTypeId?'Shift in progress':'—'],
+                    ['Target',selStage?`${selTarget} units/shift${selectedM.setupApplied?' (adjusted)':''}`:'—'],
+                  ].map(([k,v])=>(
+                    <div className="md-row" key={k}>
+                      <span className="md-k">{k}</span>
+                      <span className="md-v" style={k==='Job'?{color:'var(--accent)'}:{}}>{v}</span>
+                    </div>
+                  ));
+                })()}
+                <div className="md-actions">
+                  {selectedM.status==='breakdown'&&isAdmin&&<button className="md-btn primary" onClick={()=>setRepairData({machine:selectedM,shiftKey:viewShift})}>Mark repaired</button>}
+                  {selectedM.status==='running'&&isAdmin&&<button className="md-btn" onClick={()=>setIdle(selectedM.id,viewShift)}>Set idle</button>}
+                  {selectedM.status!=='breakdown'&&<button className="md-btn danger" onClick={()=>setBreakdownData({machine:selectedM,shiftKey:viewShift})}>Report breakdown</button>}
+                </div>
+                {(()=>{
+                  const {ct,stage,route}=resolveStage(castingTypes,selectedM);
+                  const isManual=selectedM.shift==='manual';
+                  if(!ct||!stage){
+                    return (
+                      <div className="prod-entry">
+                        <div className="prod-entry-title">Production tracking</div>
+                        <div className="empty">No job assigned — use Assign jobs to set machine, operator, casting type, route, and step together.</div>
+                        {isAdmin&&<button className="md-btn" style={{marginTop:8,width:'100%'}} onClick={()=>setShowAssign(true)}>Open Assign jobs</button>}
+                      </div>
+                    );
+                  }
+                  const effectiveTarget=selectedM.setupApplied&&selectedM.adjustedTarget?selectedM.adjustedTarget:stage.target;
+                  const effectiveStage=selectedM.setupApplied&&selectedM.adjustedTarget?{...stage,target:selectedM.adjustedTarget}:stage;
+                  const shiftKey=isManual?'manual':viewShift;
+                  return (
+                    <div className="prod-entry">
+                      <div className="prod-entry-title">Production tracking</div>
+                      <div style={{fontSize:11,color:'var(--text2)',marginBottom:8}}>{ct.name} — {route?route.name:''} ({stage.name}){isManual?<span style={{marginLeft:6,color:'var(--manual)',fontFamily:'var(--mono)',fontSize:9}}>MANUAL</span>:null}</div>
+                      <div className="prod-vs">
+                        <span>Logged: <b>{selectedM.prodCount}</b></span>
+                        <span>Target: <b>{effectiveTarget}</b>/shift{selectedM.setupApplied?' (adj.)':''}</span>
+                      </div>
+                      {selectedM.setupApplied&&(
+                        <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--warn)',marginBottom:8}}>⚙ Setup applied: {selectedM.setupHoursUsed}hr — target reduced from {stage.target} to {selectedM.adjustedTarget}</div>
+                      )}
+                      {selectedM.prodCount>0&&selectedM.newPieces!==undefined&&(
+                        <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',marginBottom:8}}>New: {selectedM.newPieces} · Rework: {selectedM.reworkPieces} · Casting defect: {selectedM.castingDefects||0} · Machining defect: {selectedM.machiningDefects||0}</div>
+                      )}
+                      {selectedM.shiftComplete
+                        ?<span className={`shift-done-tag${selectedM.prodCount>=effectiveTarget?' ok':' low'}`}>Shift complete — {selectedM.prodCount>=effectiveTarget?'target met':`short by ${effectiveTarget-selectedM.prodCount}`}</span>
+                        :(
+                          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                            <button className="md-btn" onClick={()=>setLogProgressData({machine:selectedM,pj:effectiveStage,shiftKey})}>LOG PROGRESS</button>
+                            {!isManual&&selectedM.setupApplied&&!selectedM.settingApproved
+                              ?(selectedM.settingApprovalStatus==='pending'
+                                ?<div className="info-box neutral" style={{marginBottom:0,fontSize:10}}>⏳ Line inspection submitted — awaiting supervisor approval</div>
+                                :(
+                                  <>
+                                    {selectedM.settingApprovalStatus==='disapproved'&&selectedM.settingRejectionNote&&(
+                                      <div className="info-box danger" style={{marginBottom:8,fontSize:10}}>✗ Rejected by supervisor: {selectedM.settingRejectionNote} — redo setup and resubmit.</div>
+                                    )}
+                                    <button className="complete-btn" style={{background:'var(--warn)'}} onClick={()=>setLineInspectionData({machine:selectedM,shiftKey})}>SETTING APPROVED</button>
+                                  </>
+                                )
+                              )
+                              :<button className="complete-btn" onClick={()=>setShiftCompleteData({machine:selectedM,pj:effectiveStage,shiftKey})}>MARK SHIFT COMPLETE</button>
+                            }
+                          </div>
+                        )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
+          <div className="sb-sec">
+            <div className="row-between" style={{marginBottom:'.625rem'}}>
+              <div className="sb-title" style={{marginBottom:0}}>Live alerts</div>
+              {isAdmin&&alerts.length>0&&<button className="small-btn danger" onClick={()=>{if(window.confirm('Clear all alerts?'))clearAllAlerts();}}>Clear all</button>}
+            </div>
+            {!alerts.length?<div className="empty">No alerts</div>:(
+              <div className="alert-list">
+                {alerts.map(a=>{
+                  if(a.type==='shortfall'&&a.data){
+                    return (
+                      <div className="al-item shortfall" key={a.id}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',marginBottom:4}}>
+                          <span className="al-msg" style={{color:'var(--danger)'}}>⚠ Shortfall — {a.data.machine}</span>
+                          <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+                            <span className="al-time">{a.time}</span>
+                            {isAdmin&&<button className="al-dismiss" onClick={()=>removeAlert(a.id)}>×</button>}
+                          </div>
+                        </div>
+                        <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',lineHeight:1.8,marginBottom:6,width:'100%'}}>
+                          <div>Operator: <b style={{color:'var(--text)'}}>{a.data.operator}</b></div>
+                          <div>Job: <b style={{color:'var(--text)'}}>{a.data.job}</b></div>
+                          <div>Total: <b style={{color:'var(--danger)'}}>{a.data.produced}</b> / Target: <b style={{color:'var(--text)'}}>{a.data.target}</b> (–{a.data.shortfall})</div>
+                          {a.data.newPieces!==undefined&&<div>New: <b style={{color:'var(--text)'}}>{a.data.newPieces}</b> · Rework: <b style={{color:'var(--text)'}}>{a.data.reworkPieces}</b></div>}
+                          <div style={{marginTop:4,padding:'5px 7px',background:'var(--bg4)',borderRadius:'var(--r)',color:'var(--text)',fontFamily:'var(--font)',fontSize:11}}>"{a.data.reason}"</div>
+                        </div>
+                        {isAdmin&&a.data.status==='pending'?(
+                          <div style={{display:'flex',gap:5,width:'100%'}}>
+                            <button className="md-btn primary" style={{fontSize:10,padding:'6px 8px'}} onClick={()=>setDecisionData({alertId:a.id,decision:'approved'})}>✓ Approve</button>
+                            <button className="md-btn danger" style={{fontSize:10,padding:'6px 8px'}} onClick={()=>setDecisionData({alertId:a.id,decision:'disapproved'})}>✗ Disapprove</button>
+                          </div>
+                        ):a.data.status&&a.data.status!=='pending'?(
+                          <div style={{fontSize:10,fontFamily:'var(--mono)',color:a.data.status==='approved'?'var(--accent3)':'var(--danger)',lineHeight:1.6}}>
+                            {a.data.status==='approved'?'✓ Approved':'✗ Disapproved'} by {a.data.decidedBy}
+                            {a.data.decisionNote&&<div style={{color:'var(--text2)',fontFamily:'var(--font)',fontSize:11,marginTop:2}}>{a.data.decisionNote}</div>}
+                          </div>
+                        ):(!isAdmin&&<div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)'}}>Awaiting review</div>)}
+                      </div>
+                    );
+                  }
+                  if(a.type==='setting_review'&&a.data){
+                    const filledRows=(a.data.rows||[]).filter(r=>r.specification.trim()||r.piece1.trim()||r.piece2.trim());
+                    return (
+                      <div className="al-item" style={{borderLeft:'3px solid var(--warn)'}} key={a.id}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%',marginBottom:4}}>
+                          <span className="al-msg" style={{color:'var(--warn)'}}>⚙ Setting inspection — {a.data.machine}</span>
+                          <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+                            <span className="al-time">{a.time}</span>
+                            {isAdmin&&<button className="al-dismiss" onClick={()=>removeAlert(a.id)}>×</button>}
+                          </div>
+                        </div>
+                        <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',lineHeight:1.8,marginBottom:6,width:'100%'}}>
+                          <div>Operator: <b style={{color:'var(--text)'}}>{a.data.operator}</b></div>
+                          <div>Shift: <b style={{color:'var(--text)'}}>{a.data.shiftKey==='night'?'Night':'Day'}</b></div>
+                          {filledRows.length?filledRows.map(r=>(
+                            <div key={r.sr} style={{marginTop:2}}>#{r.sr} {r.specification||'—'}: <b style={{color:'var(--text)'}}>{r.piece1||'—'}</b> / <b style={{color:'var(--text)'}}>{r.piece2||'—'}</b></div>
+                          )):<div style={{marginTop:2,color:'var(--text3)'}}>No rows filled in</div>}
+                        </div>
+                        {isAdmin&&a.data.status==='pending'?(
+                          <div style={{display:'flex',gap:5,width:'100%'}}>
+                            <button className="md-btn primary" style={{fontSize:10,padding:'6px 8px'}} onClick={()=>setSettingDecisionData({alertId:a.id,decision:'approved'})}>✓ Approve</button>
+                            <button className="md-btn danger" style={{fontSize:10,padding:'6px 8px'}} onClick={()=>setSettingDecisionData({alertId:a.id,decision:'disapproved'})}>✗ Reject</button>
+                          </div>
+                        ):a.data.status&&a.data.status!=='pending'?(
+                          <div style={{fontSize:10,fontFamily:'var(--mono)',color:a.data.status==='approved'?'var(--accent3)':'var(--danger)',lineHeight:1.6}}>
+                            {a.data.status==='approved'?'✓ Approved':'✗ Rejected'} by {a.data.decidedBy}
+                            {a.data.decisionNote&&<div style={{color:'var(--text2)',fontFamily:'var(--font)',fontSize:11,marginTop:2}}>{a.data.decisionNote}</div>}
+                          </div>
+                        ):(!isAdmin&&<div style={{fontSize:10,color:'var(--text3)',fontFamily:'var(--mono)'}}>Awaiting review</div>)}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className={`al-item${a.type==='warn'?' warn':a.type==='info'?' info':''}`} key={a.id}>
+                      <div><div className="al-msg">{a.msg}</div><div className="al-time">{a.time}</div></div>
+                      {isAdmin&&<button className="al-dismiss" onClick={()=>removeAlert(a.id)}>×</button>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Root ───────────────────────────────────────────────────
+function App() {
+  const [users,setUsers]=useState(DEFAULT_USERS);
+  const [currentUser,setCurrentUser]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [fbReady,setFbReady]=useState(!!window.__firebaseReady);
+
+  useEffect(()=>{
+    if(!window.__firebaseReady) window.addEventListener('firebase-ready',()=>setFbReady(true),{once:true});
+  },[]);
+
+  useEffect(()=>{
+    if(!fbReady) return;
+    fb.get('users').then(u=>{
+      if(u&&Array.isArray(u)&&u.length>0){
+        setUsers(u);
+      } else {
+        // Do NOT write defaults here. A failed/null read must never overwrite
+        // real Firestore data. Just use defaults locally for this session;
+        // an admin can fix it via Manage Users, or retry will pick up real data.
+        setUsers(DEFAULT_USERS);
+      }
+      setLoading(false);
+    }).catch(()=>{ setUsers(DEFAULT_USERS); setLoading(false); });
+  },[fbReady]);
+
+  if(!fbReady||loading) return (
+    <>
+      <div className="dev-banner">⚠ DEV / TEST BUILD — SAME LIVE DATA AS PRODUCTION ⚠</div>
+      <div className="loading-spin">
+        Loading FactoryOS…
+        <div className="loading-hint">Connecting to Firebase. If this takes more than a few seconds, ensure Firestore is created and your security rules allow read/write.</div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <div className="dev-banner">⚠ DEV / TEST BUILD — SAME LIVE DATA AS PRODUCTION ⚠</div>
+      {!currentUser
+        ?<LoginScreen users={users} onLogin={setCurrentUser}/>
+        :<Dashboard currentUser={currentUser} users={users} setUsers={setUsers} onLogout={()=>setCurrentUser(null)}/>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

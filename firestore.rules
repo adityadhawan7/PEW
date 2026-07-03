@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Deploy via Firebase Console -> Firestore Database -> Rules (paste and Publish), or
+// `firebase deploy --only firestore:rules` if you have the CLI installed and are logged in.
+//
+// IMPORTANT: do not deploy this until the Firebase-Auth-enabled app build is live and verified
+// end-to-end against the CURRENT (open) rules first. Deploying these rules before the app is
+// ready locks every client out immediately. See the rollout order in the project's plan notes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // True only if the CALLER's own profile doc (never the target path being accessed) has
+    // role 'admin' or 'supervisor'. Always keyed off request.auth.uid, never off a path
+    // variable, so this can't be spoofed by writing to someone else's doc.
+    function isStaff() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/factoryos_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/factoryos_users/$(request.auth.uid)).data.role in ['admin', 'supervisor'];
+    }
+
+    // True only if the CALLER's own profile doc has role 'admin' exactly — matches the app's
+    // current Manage Users gate, which is admin-only (supervisors don't get it).
+    function isAdminOnly() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/factoryos_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/factoryos_users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /factoryos_users/{userId} {
+      allow get:   if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow list:  if isStaff();
+      allow write: if isAdminOnly();
+    }
+
+    // machines, alerts, casting_types, wip, stock_log, attendance, sessions — all under one
+    // flat per-key document scheme. Authenticated-only, not role-split: these documents are
+    // written by both admin flows and regular-operator flows blended into the same document,
+    // so a clean role boundary isn't possible without a larger data-model refactor.
+    match /factoryos/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && docId != 'users'; // legacy doc: read-only during/after cutover to factoryos_users
+    }
+  }
+}

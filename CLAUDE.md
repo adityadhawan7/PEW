@@ -14,7 +14,7 @@ There is no test suite, linter, or type checker configured in this project.
 
 ## What this is
 
-FactoryOS is a single-page factory floor management dashboard: machine status/production tracking, casting-type routing, stock/WIP, attendance, wages, and alerts. It was migrated from a single-file HTML prototype (`factory-os-dev.html`, kept in the repo root for reference only — not part of the build) into this Vite + React project. The migration was a straight structural port: components, business logic, and CSS class names were kept verbatim, just split into files.
+FactoryOS is a single-page factory floor management dashboard: machine status/production tracking, casting-type routing, stock/WIP, attendance, wages, and alerts. It was migrated from a single-file HTML prototype into this Vite + React project — that original file has since been removed from the repo (it predates Firebase Auth, so it no longer works against the current Firestore rules anyway). The migration was a straight structural port: components, business logic, and CSS class names were kept verbatim, just split into files.
 
 ## Data layer: Firestore via a small wrapper
 

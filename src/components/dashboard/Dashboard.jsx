@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { fb } from '../../firebase.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState, resetMachineState } from '../../utils.js';
 
 import UserModal from '../UserModal.jsx';
 import MachinesModal from '../MachinesModal.jsx';
 import OrdersModal from '../OrdersModal.jsx';
 import MaintenanceModal from '../MaintenanceModal.jsx';
 import InspectionLogModal from '../InspectionLogModal.jsx';
+import ResetDataModal from '../ResetDataModal.jsx';
 import AnalyticsView from './AnalyticsView.jsx';
 import CastingTypesModal from '../CastingTypesModal.jsx';
 import AssignModal from '../AssignModal.jsx';
@@ -55,6 +56,7 @@ export default function Dashboard({currentUser,onLogout}) {
   const [showMaintenance,setShowMaintenance]=useState(false);
   const [inspectionLog,setInspectionLog]=useState([]);
   const [showInspections,setShowInspections]=useState(false);
+  const [showResetData,setShowResetData]=useState(false);
   const [view,setView]=useState('floor'); // 'floor' | 'analytics'
   const [sessions,setSessions]=useState({});
   const [clock,setClock]=useState(new Date());
@@ -145,6 +147,20 @@ export default function Dashboard({currentUser,onLogout}) {
   // Durable audit trail of inspections — the alert feed is capped at 200, this isn't (well, 1000).
   // Only filled rows are stored to keep entries small.
   const writeInspectionLog=list=>{ setInspectionLog(list); fb.set('inspection_log',list); };
+
+  // Admin-only "Reset data" action (see ResetDataModal) — wipes every ACTIVITY log back to
+  // empty and puts every machine back to idle. Deliberately never touches castingTypes or
+  // user accounts (factoryos_users) — those are real configuration, not trial data.
+  const handleResetTestData=async()=>{
+    const resetMachines=resetMachineState(machines);
+    setMachines(resetMachines); setAlerts([]); setWip({}); setStockLog([]); setAttendance({});
+    setWageLog([]); setAdjustments([]); setOrders([]); setMaintSchedules([]); setMaintLog([]); setInspectionLog([]);
+    await Promise.all([
+      fb.set('machines',resetMachines), fb.set('alerts',[]), fb.set('wip',{}), fb.set('stock_log',[]),
+      fb.set('attendance',{}), fb.set('wage_log',[]), fb.set('adjustments',[]), fb.set('orders',[]),
+      fb.set('maintenance_schedules',[]), fb.set('maintenance_log',[]), fb.set('inspection_log',[]),
+    ]);
+  };
   const pushAlert=(type,msg,data=null)=>{ const a={id:Date.now(),type,msg,data,time:nowStr(),date:todayStr(),ts:fullTs()}; writeAlerts([a,...alerts].slice(0,200)); };
   const removeAlert=id=>writeAlerts(alerts.filter(x=>x.id!==id));
   const clearAllAlerts=()=>writeAlerts([]);
@@ -350,6 +366,7 @@ export default function Dashboard({currentUser,onLogout}) {
       {showOrders&&<OrdersModal orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onClose={()=>setShowOrders(false)}/>}
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
+      {showResetData&&<ResetDataModal onConfirm={handleResetTestData} onClose={()=>setShowResetData(false)}/>}
       {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
       {showWageRegister&&<WageRegisterModal attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onClose={()=>setShowWageRegister(false)}/>}
       {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} onSubmit={handleShiftComplete} onClose={()=>setShiftCompleteData(null)}/>}
@@ -369,6 +386,7 @@ export default function Dashboard({currentUser,onLogout}) {
         setShowMachines={setShowMachines} setShowOrders={setShowOrders} ordersAttention={ordersAttention}
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
         setShowInspections={setShowInspections}
+        setShowResetData={setShowResetData}
         view={view} setView={setView}
       />
 

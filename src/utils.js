@@ -559,6 +559,14 @@ export function defaultSlot(){
     setupApplied:false,setupHoursUsed:0,adjustedTarget:null,settingApproved:false,lineInspection:null,
     settingApprovalStatus:null,settingRejectionNote:null};
 }
+// Clears every machine's current job/operator/production/setup/inspection state back to a clean
+// idle slot (the same shape defaultSlot() already gives fresh machines) — id/name/type/shift/
+// target are preserved, only in-progress work is wiped. Used by the admin "Reset data" action.
+export function resetMachineState(machines){
+  return machines.map(m=>m.shift==='cnc_vmc'
+    ? {...m,shifts:{day:defaultSlot(),night:defaultSlot()}}
+    : {...m,...defaultSlot()});
+}
 // Returns the assignment slot for a given shiftKey ('day'|'night') on a cnc_vmc machine.
 // Falls back to migrating pre-existing flat fields into the 'day' slot for machines saved before
 // the day/night split existed, so no in-progress assignment is lost.

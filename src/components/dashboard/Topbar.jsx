@@ -6,7 +6,7 @@ export default function Topbar({
   viewShift, setViewShift, clock, isAdmin, currentUser, onLogout,
   setShowOnline, setShowDownload, setShowBreakdownHistory, setShowProd,
   setShowAssign, setShowStock, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
-  setShowOrders, ordersAttention, setShowMaintenance, maintAttention, setShowInspections, view, setView,
+  setShowOrders, ordersAttention, setShowMaintenance, maintAttention, setShowInspections, setShowResetData, view, setView,
 }) {
   const [menuOpen,setMenuOpen]=useState(false);
   useEffect(()=>{
@@ -48,6 +48,7 @@ export default function Topbar({
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowWageRegister)}>Wages</button>}
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowUser)}>Manage users</button>}
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowMachines)}>Manage machines</button>}
+          {currentUser.role==='admin'&&<button className="icon-btn" style={{color:'var(--danger)',borderColor:'#f0564f40'}} onClick={act(setShowResetData)}>⚠ Reset data</button>}
           <button className="icon-btn" onClick={onLogout}>Sign out</button>
         </div>
         <div className="user-badge">

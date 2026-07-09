@@ -117,7 +117,3 @@ The spec/1st-piece/2nd-piece measurement table (`LineInspectionModal`) serves tw
 ## Report/print modals
 
 `DownloadModal`, `BreakdownHistoryModal`, and `WageRegisterModal` generate printable output by building an HTML string client-side and opening it in a new window (`window.open` + `document.write` + `.print()`). This is intentional — don't refactor these into React-rendered print views without discussing it first, since it changes how the generated document is styled/printed.
-
-## Danger zone
-
-`ResetDataModal` (admin-only "⚠ Reset data" topbar button, deliberately placed last in the group) wipes every *activity* record — alerts, WIP, `stock_log`, `attendance`, `wage_log`, `adjustments`, `orders`, `maintenance_schedules`, `maintenance_log`, `inspection_log` — and puts every machine back to idle via `resetMachineState` (`utils.js`, reuses `defaultSlot()`). It deliberately never touches `casting_types` or `factoryos_users` — those are real configuration, not trial data. Requires typing `RESET` to confirm (stronger than the app's usual `confirmDialog`, given the blast radius); not exposed to supervisors.

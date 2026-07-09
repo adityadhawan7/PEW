@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, resetMachineState, defaultSlot } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -830,34 +830,3 @@ describe('computeOperatorDayPay — monthly salary', () => {
   });
 });
 
-describe('resetMachineState', () => {
-  it('resets a cnc_vmc machine\'s day and night slots to idle, keeping id/name/target', () => {
-    const machines = [{
-      id: 'CNC-1', name: 'CNC 1', type: 'cnc', shift: 'cnc_vmc', target: 120,
-      shifts: {
-        day: { ...defaultSlot(), status: 'running', job: 'Some job', prodCount: 55, assignedOperator: 'op1' },
-        night: { ...defaultSlot(), status: 'breakdown' },
-      },
-    }];
-    const [reset] = resetMachineState(machines);
-    expect(reset.id).toBe('CNC-1');
-    expect(reset.name).toBe('CNC 1');
-    expect(reset.target).toBe(120);
-    expect(reset.shifts.day).toEqual(defaultSlot());
-    expect(reset.shifts.night).toEqual(defaultSlot());
-  });
-
-  it('resets a manual machine\'s flat fields to idle, keeping id/name/target', () => {
-    const machines = [{
-      id: 'MIL-1', name: 'Milling M/C 1', type: 'milling', shift: 'manual', target: 90,
-      status: 'running', job: 'Job X', prodCount: 40, assignedOperator: 'op2', operator: 'Operator 2',
-    }];
-    const [reset] = resetMachineState(machines);
-    expect(reset.id).toBe('MIL-1');
-    expect(reset.target).toBe(90);
-    expect(reset.status).toBe('idle');
-    expect(reset.job).toBe(null);
-    expect(reset.prodCount).toBe(0);
-    expect(reset.assignedOperator).toBe(null);
-  });
-});

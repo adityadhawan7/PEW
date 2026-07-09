@@ -19,7 +19,7 @@ export default function Topbar({
   const act=setter=>()=>{ setter(true); setMenuOpen(false); };
   return (
     <div className="topbar">
-      <div className="logo-mark"><div className="logo-dot"></div>FACTORY OS · DEV</div>
+      <div className="logo-mark"><div className="logo-dot"></div>FACTORY OS</div>
       <div className="shift-tabs">
         <div className="st-group">
           <button className={`st-tab t-day${viewShift==='day'?' active':''}`} onClick={()=>setViewShift('day')}><div className="dot"></div>CNC/VMC Day</button>

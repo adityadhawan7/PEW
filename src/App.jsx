@@ -55,23 +55,19 @@ export default function App() {
   };
 
   if(loading) return (
-    <>
-      <div className="dev-banner">⚠ DEV / TEST BUILD — SAME LIVE DATA AS PRODUCTION ⚠</div>
-      <div className="loading-spin">
-        Loading FactoryOS…
-        <div className="loading-hint">
-          {timedOut
-            ?'Still connecting. If this keeps happening, check your internet connection or try again.'
-            :'Connecting to Firebase. If this takes more than a few seconds, ensure Firestore is created and your security rules allow read/write.'}
-        </div>
-        {timedOut&&<button className="login-btn" style={{maxWidth:200}} onClick={()=>window.location.reload()}>RETRY</button>}
+    <div className="loading-spin">
+      Loading FactoryOS…
+      <div className="loading-hint">
+        {timedOut
+          ?'Still connecting. If this keeps happening, check your internet connection or try again.'
+          :'Connecting to Firebase. If this takes more than a few seconds, ensure Firestore is created and your security rules allow read/write.'}
       </div>
-    </>
+      {timedOut&&<button className="login-btn" style={{maxWidth:200}} onClick={()=>window.location.reload()}>RETRY</button>}
+    </div>
   );
 
   return (
     <>
-      <div className="dev-banner">⚠ DEV / TEST BUILD — SAME LIVE DATA AS PRODUCTION ⚠</div>
       {!currentUser
         ?<LoginScreen onLogin={handleLogin} revokedMsg={revokedMsg}/>
         :<Dashboard currentUser={currentUser} onLogout={handleLogout}/>}

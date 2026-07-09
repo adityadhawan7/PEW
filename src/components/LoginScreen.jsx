@@ -23,7 +23,7 @@ export default function LoginScreen({onLogin,revokedMsg}) {
     <div className="login-screen">
       <div className="login-wrap">
         <div className="login-left">
-          <div className="login-logo"><div className="login-logo-dot"></div>FactoryOS v3.2 — DEV BUILD</div>
+          <div className="login-logo"><div className="login-logo-dot"></div>FactoryOS</div>
           <h2>Sign in</h2>
           <p>Each worker has their own username and password. Contact your admin if you don't have one.</p>
           {revokedMsg&&<div className="login-error">{revokedMsg}</div>}

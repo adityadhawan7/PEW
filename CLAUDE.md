@@ -82,6 +82,8 @@ src/
 
 ## Wages — piece-rate vs daily
 
+**Access**: the Wages and Attendance topbar buttons are gated `role==='admin'` only (owner's decision — supervisors must not see pay data), unlike most staff screens which use the shared `isAdmin` (admin+supervisor) gate.
+
 Each operator profile has a `wageType`: `'production'` (piece-rate) or `'daily'` (missing = `'daily'`). Pay rules live in two pure helpers in `utils.js` — `computeShiftPay` (one wage_log entry → pay: ≥target = full wage + `calcOtPay` overtime; <target gated by the shortfall review: approved = full, disapproved/pending = proportional) and `computeOperatorDayPay` (production users sum shift pays — multi-machine days can exceed one daily wage — falling back to attendance on no-shift days; daily users get attendance × wage + OT).
 
 `handleShiftComplete` writes a **facts-only** entry (produced/target/ratePerHour/status, no money) to the `wage_log` flat doc (capped 2000, newest first); `handleDecisionSubmit` settles pending entries via the `alertId` join. `WageRegisterModal` computes money at read time from these facts × the operator's *current* dailyWage. Do not compute payroll from `alerts` — that doc is capped at 200 and drops older entries.

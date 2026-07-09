@@ -44,8 +44,8 @@ export default function Topbar({
           {isAdmin&&<button className="icon-btn" onClick={act(setShowAssign)}>Assign jobs</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowOrders)}>Orders{ordersAttention>0&&<span style={{color:'var(--warn)'}}> ⚠{ordersAttention}</span>}</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowStock)}>Stock</button>}
-          {isAdmin&&<button className="icon-btn" onClick={act(setShowAttendance)}>Attendance</button>}
-          {isAdmin&&<button className="icon-btn" onClick={act(setShowWageRegister)}>Wages</button>}
+          {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowAttendance)}>Attendance</button>}
+          {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowWageRegister)}>Wages</button>}
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowUser)}>Manage users</button>}
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowMachines)}>Manage machines</button>}
           <button className="icon-btn" onClick={onLogout}>Sign out</button>

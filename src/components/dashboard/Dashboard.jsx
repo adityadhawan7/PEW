@@ -275,7 +275,10 @@ export default function Dashboard({currentUser,onLogout}) {
     const a={
       id:Date.now(),
       type:isBelow?'shortfall':'info',
-      msg:isBelow?null:`✓ ${m.name} (${shiftKey} shift): "${pj.name}" — ${total} units (${newPieces} new, ${reworkPieces} rework)${(castingDefects+machiningDefects)>0?` · ${castingDefects+machiningDefects} defects`:''}${otPay?` · OT ₹${otPay}`:''}`,
+      // No ₹ figures in the shared feed message — it's visible to every role (operators included),
+      // and OT pay is derived straight from daily wage. Actual money stays behind the admin-only
+      // Wages screen; otPay/otHours are still kept in `data` below for that screen's own display.
+      msg:isBelow?null:`✓ ${m.name} (${shiftKey} shift): "${pj.name}" — ${total} units (${newPieces} new, ${reworkPieces} rework)${(castingDefects+machiningDefects)>0?` · ${castingDefects+machiningDefects} defects`:''}${otHours?` · ${otHours}h OT`:''}`,
       time:nowStr(),date:todayStr(),ts:fullTs(),
       data:{machine:m.name,operator:m.operator,job:pj.name,produced:total,newPieces,reworkPieces,castingDefects,machiningDefects,target:pj.target,shortfall:isBelow?pj.target-total:0,reason:reason||null,status:isBelow?'pending':null,category:isBelow?'shortfall':'production',otHours,otPay}
     };

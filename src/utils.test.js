@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -778,5 +778,54 @@ describe('aggregateFoundryScore', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].supplier).toBe('Foo');
     expect(rows[0].supplied).toBe(100);
+  });
+});
+
+describe('daysInMonth', () => {
+  it('handles 31-day and 30-day months', () => {
+    expect(daysInMonth('2026-07-15')).toBe(31); // July
+    expect(daysInMonth('2026-04-01')).toBe(30); // April
+  });
+  it('handles February in a non-leap and a leap year', () => {
+    expect(daysInMonth('2026-02-10')).toBe(28); // 2026 not a leap year
+    expect(daysInMonth('2024-02-10')).toBe(29); // 2024 is a leap year
+  });
+});
+
+describe('computeOperatorDayPay — monthly salary', () => {
+  it('present day pays monthlySalary / daysInMonth for that date', () => {
+    // July 2026 has 31 days.
+    const result = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', monthlySalary: 31000, wageType: 'monthly', date: '2026-07-15' });
+    expect(result.basePay).toBe(1000);
+    expect(result.source).toBe('attendance');
+  });
+
+  it('half day pays half the effective daily rate', () => {
+    const result = computeOperatorDayPay({ entries: [], attendanceStatus: 'half', monthlySalary: 31000, wageType: 'monthly', date: '2026-07-15' });
+    expect(result.basePay).toBe(500);
+  });
+
+  it('absent day pays nothing', () => {
+    const result = computeOperatorDayPay({ entries: [], attendanceStatus: 'absent', monthlySalary: 31000, wageType: 'monthly', date: '2026-07-15' });
+    expect(result.basePay).toBe(0);
+  });
+
+  it('overtime on a monthly-salary day matches calcOtPay at the same effective rate', () => {
+    const effectiveDaily = 31000 / 31; // 1000
+    const entry = { produced: 140, target: 100, ratePerHour: 12.5, status: 'ok' };
+    const result = computeOperatorDayPay({ entries: [entry], attendanceStatus: 'present', monthlySalary: 31000, wageType: 'monthly', date: '2026-07-15' });
+    const expectedOt = calcOtPay(140, 100, 12.5, effectiveDaily).otPay;
+    expect(result.otPay).toBeCloseTo(expectedOt, 2);
+    expect(result.basePay).toBe(1000);
+  });
+
+  it('missing monthlySalary pays 0 without crashing', () => {
+    const result = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', wageType: 'monthly', date: '2026-07-15' });
+    expect(result.basePay).toBe(0);
+  });
+
+  it('proration sanity check: 2 present days out of a 30-day, ₹30,000 month sum to exactly ₹2,000', () => {
+    const day = () => computeOperatorDayPay({ entries: [], attendanceStatus: 'present', monthlySalary: 30000, wageType: 'monthly', date: '2026-04-05' }).basePay; // April = 30 days
+    expect(day() + day()).toBe(2000);
   });
 });

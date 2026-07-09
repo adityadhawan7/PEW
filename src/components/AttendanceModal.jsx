@@ -41,7 +41,7 @@ export default function AttendanceModal({attendance,setAttendance,onClose}) {
               <div className="pj-row" key={o.username}>
                 <div className="pj-info">
                   <div className="pj-name">{o.name}</div>
-                  <div className="pj-meta">₹{o.dailyWage||0}/day</div>
+                  <div className="pj-meta">{o.wageType==='monthly'?`₹${o.monthlySalary||0}/month`:`₹${o.dailyWage||0}/day`}</div>
                 </div>
                 <div style={{display:'flex',gap:4,flexShrink:0}}>
                   {STATUS_OPTS.map(([v,l])=>(

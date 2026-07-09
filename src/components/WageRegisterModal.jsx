@@ -57,7 +57,7 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
       else if(status==='half')halfDays++;
       else if(status==='absent')absentDays++;
       const entries=entriesByUserDate[o.username+'|'+d]||[];
-      const pay=computeOperatorDayPay({entries,attendanceStatus:status,dailyWage:o.dailyWage||0,wageType});
+      const pay=computeOperatorDayPay({entries,attendanceStatus:status,dailyWage:o.dailyWage||0,monthlySalary:o.monthlySalary||0,wageType,date:d});
       basePay+=pay.basePay; otPay+=pay.otPay; pendingCount+=pay.pendingCount;
       if(pay.source==='production') prodShifts+=entries.length;
       entries.forEach(e=>dayDetails.push(e));
@@ -71,7 +71,7 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
     });
     const total=Math.round((basePay+otPay)*100)/100;
     return {
-      username:o.username,name:o.name,dailyWage:o.dailyWage||0,wageType,
+      username:o.username,name:o.name,dailyWage:o.dailyWage||0,monthlySalary:o.monthlySalary||0,wageType,
       presentDays,halfDays,absentDays,prodShifts,pendingCount,dayDetails,
       basePay:Math.round(basePay*100)/100,otPay:Math.round(otPay*100)/100,total,
       food:Math.round(food*100)/100,conveyance:Math.round(conveyance*100)/100,advances:Math.round(advances*100)/100,
@@ -103,9 +103,9 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
   const recentAdjustments=(adjustments||[]).slice(0,50);
 
   const toCSV=()=>{
-    const header=['Operator','Wage Type','Daily Wage','Present Days','Half Days','Absent Days','Production Shifts','Base Pay','OT Pay','Pending Shifts','Food','Conveyance','Advances','Net Payable'];
-    const body=rows.map(r=>[r.name,r.wageType==='production'?'Piece-rate':'Daily',r.dailyWage,r.presentDays,r.halfDays,r.absentDays,r.prodShifts,r.basePay,r.otPay,r.pendingCount,r.food,r.conveyance,r.advances,r.net]);
-    const all=[header,...body,[],['','','','','','','','','','','','','Grand total',Math.round(grandNet*100)/100]];
+    const header=['Operator','Wage Type','Daily Wage','Monthly Salary','Present Days','Half Days','Absent Days','Production Shifts','Base Pay','OT Pay','Pending Shifts','Food','Conveyance','Advances','Net Payable'];
+    const body=rows.map(r=>[r.name,r.wageType==='production'?'Piece-rate':r.wageType==='monthly'?'Monthly':'Daily',r.wageType==='monthly'?'':r.dailyWage,r.wageType==='monthly'?r.monthlySalary:'',r.presentDays,r.halfDays,r.absentDays,r.prodShifts,r.basePay,r.otPay,r.pendingCount,r.food,r.conveyance,r.advances,r.net]);
+    const all=[header,...body,[],['','','','','','','','','','','','','','Grand total',Math.round(grandNet*100)/100]];
     const csv=all.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob=new Blob([csv],{type:'text/csv'});
     const url=URL.createObjectURL(blob);
@@ -127,8 +127,10 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
             overtime at the extra-production ratio above it. Under-target shifts follow the shortfall review: approved = full wage,
             disapproved = proportional, awaiting review = proportional (flagged ⚠, total updates when decided). Days with no completed
             shift fall back to attendance. <b>Daily-wage staff</b>: attendance × wage, plus any overtime.
+            <b> Monthly-salary staff</b>: salary is prorated across the selected range by each day's calendar month, docked for
+            absent/half days, plus overtime on the same rule as daily-wage staff.
             Food/conveyance allowances add and salary advances deduct (entered on the other tab). Amounts use each operator's
-            <b> current</b> daily wage — download the CSV before changing wages.
+            <b> current</b> wage/salary — download the CSV before changing it.
           </p>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:'1rem'}}>
             <div className="field" style={{marginBottom:0}}><label>From</label><input type="date" className="mi" value={from} onChange={e=>setFrom(e.target.value)}/></div>
@@ -140,7 +142,7 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
                 <div key={r.username}>
                   <div className="pj-row" style={{alignItems:'flex-start',cursor:r.dayDetails.length?'pointer':'default'}} onClick={()=>r.dayDetails.length&&setExpanded(expanded===r.username?null:r.username)}>
                     <div className="pj-info">
-                      <div className="pj-name">{r.name} <span style={{fontSize:10,color:'var(--text3)'}}>· {r.wageType==='production'?'piece-rate':'daily'}</span></div>
+                      <div className="pj-name">{r.name} <span style={{fontSize:10,color:'var(--text3)'}}>· {r.wageType==='production'?'piece-rate':r.wageType==='monthly'?'monthly':'daily'}</span></div>
                       <div className="pj-meta">
                         {r.wageType==='production'?`${r.prodShifts} shift${r.prodShifts!==1?'s':''} · `:''}
                         {r.presentDays}P · {r.halfDays}H · {r.absentDays}A &nbsp;·&nbsp; base ₹{r.basePay} + OT ₹{r.otPay}

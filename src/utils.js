@@ -5,6 +5,9 @@ export const randEl = a => a[rnd(0,a.length-1)];
 export const nowStr = () => { const n=new Date(); return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`; };
 export const todayStr = () => { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`; };
 export const fullTs = () => new Date().toISOString();
+// Number of days in the calendar month that 'YYYY-MM-DD' falls in (leap years included) —
+// day 0 of the following month is the last day of this one.
+export const daysInMonth = dateStr => { const [y,m] = dateStr.split('-').map(Number); return new Date(y, m, 0).getDate(); };
 export const isActive = s => SHIFT_CFG[s].check(new Date().getHours());
 export const initials = name => name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
 // WIP key for "pieces ready to start stage N" of a casting type. Stage 1's input is raw stock
@@ -96,8 +99,18 @@ export function computeShiftPay(entry, dailyWage){
 //     fall back to attendance (present=full, half=half, absent/unmarked=0).
 //   wageType 'daily' (or missing): attendance base + OT summed from entries — byte-identical to
 //     the register's historical math, so an operator the admin hasn't flipped yet sees no change.
-export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,wageType}){
-  const wage=dailyWage||0;
+//   wageType 'monthly': identical to 'daily' below, except the per-day wage is derived as
+//     monthlySalary / daysInMonth(date) — the real day-count of THAT date's calendar month, not
+//     a flat /30. This one substitution is enough to make absences prorate (a day only pays if
+//     present/half, same as 'daily'), OT reuse the daily rule (computeShiftPay just wants a
+//     per-day number), and a date-range register prorate correctly (summing every present day's
+//     effective rate over a full calendar month equals exactly the salary; a partial range sums
+//     to a proportional share; a month-spanning range is correct because each day uses its own
+//     month's day-count).
+export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,monthlySalary,wageType,date}){
+  const wage=wageType==='monthly'
+    ? (monthlySalary||0)/daysInMonth(date||todayStr())
+    : (dailyWage||0);
   const attendanceBase=attendanceStatus==='present'?wage:attendanceStatus==='half'?wage/2:0;
   if(wageType==='production'&&entries.length){
     let basePay=0,otPay=0,pendingCount=0;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fb } from '../../firebase.js';
-import { todayStr, computeShiftPay, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore } from '../../utils.js';
+import { todayStr, computeShiftPay, daysInMonth, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore } from '../../utils.js';
 
 const daysAgoStr=n=>{ const d=new Date(); d.setDate(d.getDate()-n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
@@ -46,10 +46,17 @@ export default function AnalyticsView({wageLog,stockLog,alerts,maintLog,machines
   const defectRate=totalConsumed>0?Math.round(totalDefects/totalConsumed*1000)/10:0;
   const totalBreakdowns=breakdowns.reduce((s,b)=>s+b.count,0);
   const totalMaintSpend=maintCost.reduce((s,m)=>s+m.cost,0);
-  const wageByUsername={}; users.forEach(u=>{wageByUsername[u.username]=u.dailyWage||0;});
+  const userByUsername={}; users.forEach(u=>{userByUsername[u.username]=u;});
+  // Effective per-day rate for OT purposes — monthly staff use salary/daysInMonth(that date),
+  // same substitution as computeOperatorDayPay in utils.js.
+  const otRateFor=e=>{
+    const u=userByUsername[e.username];
+    if(!u) return 0;
+    return u.wageType==='monthly'?(u.monthlySalary||0)/daysInMonth(e.date):(u.dailyWage||0);
+  };
   const totalOtPay=Math.round((wageLog||[]).reduce((s,e)=>{
     if(!e.date||e.date<from||e.date>to) return s;
-    return s+computeShiftPay(e,wageByUsername[e.username]||0).otPay;
+    return s+computeShiftPay(e,otRateFor(e)).otPay;
   },0)*100)/100;
 
   const maxDaily=Math.max(...daily.map(d=>Math.max(d.produced,d.target)),1);

@@ -10,7 +10,7 @@ export default function UserModal({currentUser,onClose}) {
   const [users,setUsers]=useState([]);
   const [loadingUsers,setLoadingUsers]=useState(true);
   const [editing,setEditing]=useState(null); // 'new', or the uid being edited
-  const [form,setForm]=useState({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',wageType:'daily'});
+  const [form,setForm]=useState({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',monthlySalary:'',wageType:'daily'});
   const [msg,setMsg]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const [removingUid,setRemovingUid]=useState(null);
@@ -27,16 +27,18 @@ export default function UserModal({currentUser,onClose}) {
     if(!form.username.trim()||!form.name.trim()) return setMsg('Username and name required.');
     const wage=form.dailyWage===''?0:Number(form.dailyWage);
     if(isNaN(wage)||wage<0) return setMsg('Daily wage must be a number 0 or greater.');
+    const monthlySalary=form.monthlySalary===''?0:Number(form.monthlySalary);
+    if(isNaN(monthlySalary)||monthlySalary<0) return setMsg('Monthly salary must be a number 0 or greater.');
     if(editing==='new'&&!form.password) return setMsg('Password required.');
     if(editing==='new'&&form.password.length<6) return setMsg('Password must be at least 6 characters (Firebase requirement).');
     setMsg('Saving…');
     setSubmitting(true);
     try{
       if(editing==='new'){
-        await fb.createUserWithProfile(form.username.trim(),form.password,{name:form.name,role:form.role,shift:form.shift,dailyWage:wage,wageType:form.wageType});
+        await fb.createUserWithProfile(form.username.trim(),form.password,{name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType});
       } else {
         const target=users.find(u=>u.uid===editing);
-        await fb.setUserProfile(editing,{username:target.username,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,wageType:form.wageType});
+        await fb.setUserProfile(editing,{username:target.username,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType});
       }
       setMsg('Saved.'); setEditing(null);
       await reload();
@@ -71,15 +73,15 @@ export default function UserModal({currentUser,onClose}) {
               <div className="user-row-avatar" style={{background:AC[u.role]||'#888'}}>{initials(u.name)}</div>
               <div className="user-row-info">
                 <div className="user-row-name">{u.name}{u.uid===currentUser.uid?' (you)':''}</div>
-                <div className="user-row-meta">{u.username} · {u.role}{u.role==='operator'?` · ₹${u.dailyWage||0}/day${u.wageType==='production'?' · piece-rate':''}`:''}</div>
+                <div className="user-row-meta">{u.username} · {u.role}{u.role==='operator'?(u.wageType==='monthly'?` · ₹${u.monthlySalary||0}/month`:` · ₹${u.dailyWage||0}/day${u.wageType==='production'?' · piece-rate':''}`):''}</div>
               </div>
               <div className="user-row-actions">
-                <button className="small-btn" disabled={removingUid===u.uid} onClick={()=>{setForm({username:u.username,password:'',name:u.name,role:u.role,shift:u.shift,dailyWage:u.dailyWage??'',wageType:u.wageType||'daily'});setEditing(u.uid);setMsg('');}}>Edit</button>
+                <button className="small-btn" disabled={removingUid===u.uid} onClick={()=>{setForm({username:u.username,password:'',name:u.name,role:u.role,shift:u.shift,dailyWage:u.dailyWage??'',monthlySalary:u.monthlySalary??'',wageType:u.wageType||'daily'});setEditing(u.uid);setMsg('');}}>Edit</button>
                 <button className="small-btn danger" disabled={removingUid===u.uid} onClick={()=>remove(u)}>{removingUid===u.uid?'Removing…':'Remove'}</button>
               </div>
             </div>
           ))}
-          <button className="add-btn" style={{marginTop:'.5rem'}} onClick={()=>{setForm({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',wageType:'daily'});setEditing('new');setMsg('');}}>+ ADD USER</button>
+          <button className="add-btn" style={{marginTop:'.5rem'}} onClick={()=>{setForm({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',monthlySalary:'',wageType:'daily'});setEditing('new');setMsg('');}}>+ ADD USER</button>
           {msg&&<div className="save-msg">{msg}</div>}
         </>
       ):(
@@ -95,16 +97,19 @@ export default function UserModal({currentUser,onClose}) {
               <option value="day">CNC/VMC — Day</option><option value="night">CNC/VMC — Night</option><option value="manual">Manual/Labour</option>
             </select>
           </div>
-          {form.role==='operator'&&<div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>}
           {form.role==='operator'&&(
             <div className="field"><label>Wage type</label>
               <div className="role-chips">
                 <div className={`role-chip${form.wageType==='daily'?' active':''}`} onClick={()=>setForm({...form,wageType:'daily'})}>Daily wage</div>
                 <div className={`role-chip${form.wageType==='production'?' active':''}`} onClick={()=>setForm({...form,wageType:'production'})}>Production (piece-rate)</div>
+                <div className={`role-chip${form.wageType==='monthly'?' active':''}`} onClick={()=>setForm({...form,wageType:'monthly'})}>Monthly salary</div>
               </div>
-              <p className="modal-note" style={{marginTop:6,marginBottom:0}}>Production: paid per completed shift vs its target (shortfall review decides under-target pay); falls back to attendance on days with no shift. Daily: attendance × wage, plus overtime.</p>
+              <p className="modal-note" style={{marginTop:6,marginBottom:0}}>Daily: attendance × wage, plus overtime. Production: paid per completed shift vs its target (shortfall review decides under-target pay); falls back to attendance on days with no shift. Monthly: fixed salary prorated by attendance (absent/half days docked, present days paid in full), plus overtime on the same rule as daily.</p>
             </div>
           )}
+          {form.role==='operator'&&form.wageType==='monthly'
+            ?<div className="field"><label>Monthly salary (₹) — prorated by attendance across the pay period</label><input className="mi" type="number" min="0" value={form.monthlySalary} onChange={e=>setForm({...form,monthlySalary:e.target.value})} placeholder="e.g. 15000"/></div>
+            :form.role==='operator'&&<div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>}
           {editing!=='new'&&<p className="modal-note">Password changes for existing users aren't available here — see the admin notes on resetting a forgotten password.</p>}
           {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
           <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={save} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'SAVING…':'SAVE'}</button><button className="can-btn" onClick={()=>setEditing(null)} disabled={submitting}>Cancel</button></div>

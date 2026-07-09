@@ -95,7 +95,7 @@ export default function UserModal({currentUser,onClose}) {
               <option value="day">CNC/VMC — Day</option><option value="night">CNC/VMC — Night</option><option value="manual">Manual/Labour</option>
             </select>
           </div>
-          <div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>
+          {form.role==='operator'&&<div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>}
           {form.role==='operator'&&(
             <div className="field"><label>Wage type</label>
               <div className="role-chips">

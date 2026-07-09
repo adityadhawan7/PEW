@@ -28,6 +28,7 @@ export default function UserModal({currentUser,onClose}) {
     const wage=form.dailyWage===''?0:Number(form.dailyWage);
     if(isNaN(wage)||wage<0) return setMsg('Daily wage must be a number 0 or greater.');
     if(editing==='new'&&!form.password) return setMsg('Password required.');
+    if(editing==='new'&&form.password.length<6) return setMsg('Password must be at least 6 characters (Firebase requirement).');
     setMsg('Saving…');
     setSubmitting(true);
     try{
@@ -40,7 +41,10 @@ export default function UserModal({currentUser,onClose}) {
       setMsg('Saved.'); setEditing(null);
       await reload();
     }catch(e){
-      setMsg(e.code==='auth/email-already-in-use'?'Username exists.':'Save failed — check your connection and try again.');
+      setMsg(e.code==='auth/email-already-in-use'?'Username exists.'
+        :e.code==='auth/weak-password'?'Password too weak — use at least 6 characters.'
+        :e.code==='auth/invalid-email'?'Username has characters that aren\'t allowed — use letters and numbers only.'
+        :'Save failed — check your connection and try again.');
     }finally{
       setSubmitting(false);
     }

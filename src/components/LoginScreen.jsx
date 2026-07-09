@@ -41,12 +41,12 @@ export default function LoginScreen({onLogin,revokedMsg}) {
         </div>
         <div className="login-right">
           <div className="schedule-title">Shift schedule</div>
-          {[{c:'#f0a500',n:'CNC/VMC — Day',t:'08:00–19:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
-            {c:'#7c82e0',n:'CNC/VMC — Night',t:'20:00–07:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
-            {c:'#00d977',n:'Manual/Labour — Day',t:'09:00–17:00',m:'Milling×3·Drilling×8·Lathe×4·Assembly×2·Dock Chuck×1'}
+          {[{c:'#eab048',n:'CNC/VMC — Day',t:'08:00–19:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
+            {c:'#8f96e8',n:'CNC/VMC — Night',t:'20:00–07:00',m:'CNC1·CNC2·CNC3·VMC1·VMC2'},
+            {c:'#37c978',n:'Manual/Labour — Day',t:'09:00–17:00',m:'Milling×3·Drilling×8·Lathe×4·Assembly×2·Dock Chuck×1'}
           ].map(s=>(
             <div className="sch-row" key={s.n}>
-              <div className="sch-dot" style={{background:s.c,boxShadow:`0 0 6px ${s.c}`}}></div>
+              <div className="sch-dot" style={{background:s.c}}></div>
               <div><div className="sch-name">{s.n}</div><div className="sch-time">{s.t}</div><div className="sch-machines">{s.m}</div></div>
             </div>
           ))}

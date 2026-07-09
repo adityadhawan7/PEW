@@ -1,9 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { fb } from '../../firebase.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, withShift, patchMachineShift, initMachines } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState } from '../../utils.js';
 
 import UserModal from '../UserModal.jsx';
+import MachinesModal from '../MachinesModal.jsx';
+import OrdersModal from '../OrdersModal.jsx';
+import MaintenanceModal from '../MaintenanceModal.jsx';
+import InspectionLogModal from '../InspectionLogModal.jsx';
+import AnalyticsView from './AnalyticsView.jsx';
 import CastingTypesModal from '../CastingTypesModal.jsx';
 import AssignModal from '../AssignModal.jsx';
 import OnlineModal from '../OnlineModal.jsx';
@@ -41,9 +46,20 @@ export default function Dashboard({currentUser,onLogout}) {
   const [wip,setWip]=useState({});
   const [stockLog,setStockLog]=useState([]);
   const [attendance,setAttendance]=useState({});
+  const [wageLog,setWageLog]=useState([]);
+  const [adjustments,setAdjustments]=useState([]);
+  const [orders,setOrders]=useState([]);
+  const [showOrders,setShowOrders]=useState(false);
+  const [maintSchedules,setMaintSchedules]=useState([]);
+  const [maintLog,setMaintLog]=useState([]);
+  const [showMaintenance,setShowMaintenance]=useState(false);
+  const [inspectionLog,setInspectionLog]=useState([]);
+  const [showInspections,setShowInspections]=useState(false);
+  const [view,setView]=useState('floor'); // 'floor' | 'analytics'
   const [sessions,setSessions]=useState({});
   const [clock,setClock]=useState(new Date());
   const [showUser,setShowUser]=useState(false);
+  const [showMachines,setShowMachines]=useState(false);
   const [showProd,setShowProd]=useState(false);
   const [showAssign,setShowAssign]=useState(false);
   const [showOnline,setShowOnline]=useState(false);
@@ -70,8 +86,14 @@ export default function Dashboard({currentUser,onLogout}) {
       fb.get('wip').then(v=>v||{}),
       fb.get('stock_log').then(v=>v||[]),
       fb.get('attendance').then(v=>v||{}),
-    ]).then(([m,a,ct,w,sl,at])=>{
-      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setMachinesLoaded(true);
+      fb.get('wage_log').then(v=>v||[]),
+      fb.get('adjustments').then(v=>v||[]),
+      fb.get('orders').then(v=>v||[]),
+      fb.get('maintenance_schedules').then(v=>v||[]),
+      fb.get('maintenance_log').then(v=>v||[]),
+      fb.get('inspection_log').then(v=>v||[]),
+    ]).then(([m,a,ct,w,sl,at,wl,adj,ord,ms,ml,il])=>{
+      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setWageLog(wl); setAdjustments(adj); setOrders(ord); setMaintSchedules(ms); setMaintLog(ml); setInspectionLog(il); setMachinesLoaded(true);
     });
     const unM=fb.sub('machines',v=>{if(v)setMachines(v);});
     const unA=fb.sub('alerts',v=>{if(v)setAlerts(v);});
@@ -79,8 +101,14 @@ export default function Dashboard({currentUser,onLogout}) {
     const unW=fb.sub('wip',v=>{if(v)setWip(v);});
     const unSL=fb.sub('stock_log',v=>{if(v)setStockLog(v);});
     const unAt=fb.sub('attendance',v=>{if(v)setAttendance(v);});
+    const unWL=fb.sub('wage_log',v=>{if(v)setWageLog(v);});
+    const unAdj=fb.sub('adjustments',v=>{if(v)setAdjustments(v);});
+    const unOrd=fb.sub('orders',v=>{if(v)setOrders(v);});
+    const unMS=fb.sub('maintenance_schedules',v=>{if(v)setMaintSchedules(v);});
+    const unML=fb.sub('maintenance_log',v=>{if(v)setMaintLog(v);});
+    const unIL=fb.sub('inspection_log',v=>{if(v)setInspectionLog(v);});
     const unS=fb.sub('sessions',v=>{if(v)setSessions(v);});
-    return()=>{unM();unA();unCt();unW();unSL();unAt();unS();};
+    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unS();};
   },[]);
 
   useEffect(()=>{
@@ -109,6 +137,14 @@ export default function Dashboard({currentUser,onLogout}) {
   useEffect(()=>{const t=setInterval(()=>setClock(new Date()),1000);return()=>clearInterval(t);},[]);
 
   const writeAlerts=newAlerts=>{ setAlerts(newAlerts); fb.set('alerts',newAlerts); };
+  const writeWageLog=list=>{ setWageLog(list); fb.set('wage_log',list); };
+  const writeAdjustments=list=>{ setAdjustments(list); fb.set('adjustments',list); };
+  const writeOrders=list=>{ setOrders(list); fb.set('orders',list); };
+  const writeMaintSchedules=list=>{ setMaintSchedules(list); fb.set('maintenance_schedules',list); };
+  const writeMaintLog=list=>{ setMaintLog(list); fb.set('maintenance_log',list); };
+  // Durable audit trail of inspections — the alert feed is capped at 200, this isn't (well, 1000).
+  // Only filled rows are stored to keep entries small.
+  const writeInspectionLog=list=>{ setInspectionLog(list); fb.set('inspection_log',list); };
   const pushAlert=(type,msg,data=null)=>{ const a={id:Date.now(),type,msg,data,time:nowStr(),date:todayStr(),ts:fullTs()}; writeAlerts([a,...alerts].slice(0,200)); };
   const removeAlert=id=>writeAlerts(alerts.filter(x=>x.id!==id));
   const clearAllAlerts=()=>writeAlerts([]);
@@ -153,6 +189,23 @@ export default function Dashboard({currentUser,onLogout}) {
     setMachines(updated); fb.set('machines',updated);
     const a={id:Date.now(),type:'setting_review',msg:null,data:{machine:m.name,operator:m.operator,machineId:m.id,shiftKey,rows,category:'setting_review',status:'pending'},time:nowStr(),date:todayStr(),ts:fullTs()};
     writeAlerts([a,...alerts].slice(0,200));
+    // Audit copy: setting-approval submissions are quality records too. The supervisor's
+    // decision lands on this entry later via the alertId join in handleSettingDecision.
+    const filledRows=rows.filter(r=>r.specification.trim()||r.piece1.trim()||r.piece2.trim());
+    const entry={id:'insp_'+a.id,kind:'setting',alertId:a.id,machineId:m.id,machineName:m.name,operator:m.operator||null,shiftKey,rows:filledRows,recordedBy:m.operator||currentUser.name,status:'pending',decisionNote:null,decidedBy:null,date:todayStr(),time:nowStr(),ts:fullTs()};
+    writeInspectionLog([entry,...inspectionLog].slice(0,1000));
+    setLineInspectionData(null);
+  };
+
+  // Standalone in-shift line inspection (supervisor/admin) — same measurement table as the
+  // setting-approval flow but with no approval loop: recorded straight into the alert feed.
+  const handleLineInspectionRecord=rows=>{
+    if(!lineInspectionData) return;
+    const {machine:m,shiftKey}=lineInspectionData;
+    const filledRows=rows.filter(r=>r.specification.trim()||r.piece1.trim()||r.piece2.trim());
+    pushAlert('info',`🔍 ${m.name} (${shiftKey} shift): line inspection recorded by ${currentUser.name} — ${filledRows.length} spec${filledRows.length!==1?'s':''} checked`,{machine:m.name,machineId:m.id,operator:m.operator,shiftKey,rows,category:'line_inspection',inspectedBy:currentUser.name});
+    const entry={id:Date.now(),kind:'inspection',alertId:null,machineId:m.id,machineName:m.name,operator:m.operator||null,shiftKey,rows:filledRows,recordedBy:currentUser.name,status:null,decisionNote:null,decidedBy:null,date:todayStr(),time:nowStr(),ts:fullTs()};
+    writeInspectionLog([entry,...inspectionLog].slice(0,1000));
     setLineInspectionData(null);
   };
 
@@ -170,6 +223,10 @@ export default function Dashboard({currentUser,onLogout}) {
     setMachines(updated); fb.set('machines',updated);
     const newAlerts=alerts.map(a=>a.id===alertId&&a.data?{...a,data:{...a.data,status:decision,decisionNote:note,decidedBy:currentUser.name}}:a);
     setAlerts(newAlerts); fb.set('alerts',newAlerts);
+    // Settle the audit copy in the durable inspection log too (join on alertId).
+    if(inspectionLog.some(e=>e.alertId===alertId)){
+      writeInspectionLog(inspectionLog.map(e=>e.alertId===alertId?{...e,status:decision,decisionNote:note,decidedBy:currentUser.name}:e));
+    }
     setSettingDecisionData(null);
   };
 
@@ -223,6 +280,23 @@ export default function Dashboard({currentUser,onLogout}) {
       data:{machine:m.name,operator:m.operator,job:pj.name,produced:total,newPieces,reworkPieces,castingDefects,machiningDefects,target:pj.target,shortfall:isBelow?pj.target-total:0,reason:reason||null,status:isBelow?'pending':null,category:isBelow?'shortfall':'production',otHours,otPay}
     };
     writeAlerts([a,...alerts].slice(0,200));
+
+    // Durable wage-log entry: facts only, no money — pay is computed at read time in the wage
+    // register from the operator's current dailyWage (see computeShiftPay in utils.js). This is
+    // what payroll reads; the alert above is just the live feed (capped at 200, so unsuitable
+    // for payroll). ratePerHour is snapshotted because a setup-adjusted target breaks the
+    // (extra/target) ratio. Skipped when no operator is assigned — there's no payee.
+    if(m.assignedOperator){
+      const entry={
+        id:'wl_'+a.id, alertId:a.id, date:todayStr(), time:nowStr(), ts:fullTs(),
+        username:m.assignedOperator, operatorName:m.operator,
+        machine:m.name, machineId:m.id, shiftKey, job:pj.name,
+        produced:total, target:pj.target, ratePerHour:pj.ratePerHour??null,
+        status:isBelow?'pending':'ok',
+        reason:reason||null, decisionNote:null, decidedBy:null,
+      };
+      writeWageLog([entry,...wageLog].slice(0,2000));
+    }
     setShiftCompleteData(null);
   };
 
@@ -233,6 +307,11 @@ export default function Dashboard({currentUser,onLogout}) {
     const newAlerts=alerts.map(a=>a.id===alertId&&a.data?{...a,data:{...a.data,status:decision,decisionNote:note,decidedBy:currentUser.name}}:a);
     setAlerts(newAlerts);
     fb.set('alerts',newAlerts);
+    // The shortfall decision also settles pay: approved -> full wage, disapproved -> proportional
+    // (see computeShiftPay). Join on alertId — only shift-completion entries carry one.
+    if(wageLog.some(e=>e.alertId===alertId)){
+      writeWageLog(wageLog.map(e=>e.alertId===alertId?{...e,status:decision,decisionNote:note,decidedBy:currentUser.name}:e));
+    }
     setDecisionData(null);
   };
 
@@ -247,6 +326,8 @@ export default function Dashboard({currentUser,onLogout}) {
     eff:visible.length?Math.round(visible.reduce((s,m)=>s+(m.output/m.target*100),0)/visible.length):0
   };
   const cfg=SHIFT_CFG[viewShift];
+  const ordersAttention=orders.filter(o=>['overdue','dueSoon'].includes(orderDueState(o,todayStr()))).length;
+  const maintAttention=maintSchedules.filter(s=>['overdue','dueSoon'].includes(maintenanceDueState(s,todayStr()))).length;
   const rawSelectedM=machines.find(x=>x.id===selectedMachine);
   const selectedM=rawSelectedM?withShift(rawSelectedM,viewShift):null;
   const overviewCounts={day:5,night:5,manual:machines.filter(m=>m.shift==='manual').length};
@@ -256,18 +337,22 @@ export default function Dashboard({currentUser,onLogout}) {
   return (
     <div className="dashboard">
       {showUser&&<UserModal currentUser={currentUser} onClose={()=>setShowUser(false)}/>}
+      {showMachines&&<MachinesModal machines={machines} setMachines={setMachines} onClose={()=>setShowMachines(false)}/>}
       {showProd&&<CastingTypesModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} onClose={()=>setShowProd(false)}/>}
       {showAssign&&<AssignModal machines={machines} setMachines={setMachines} castingTypes={castingTypes} wip={wip} onClose={()=>setShowAssign(false)}/>}
       {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
       {showDownload&&<DownloadModal alerts={alerts} onClose={()=>setShowDownload(false)}/>}
       {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
-      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} onClose={()=>setShowStock(false)}/>}
+      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} orders={orders} writeOrders={writeOrders} onClose={()=>setShowStock(false)}/>}
+      {showOrders&&<OrdersModal orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onClose={()=>setShowOrders(false)}/>}
+      {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
+      {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
       {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
-      {showWageRegister&&<WageRegisterModal attendance={attendance} alerts={alerts} onClose={()=>setShowWageRegister(false)}/>}
+      {showWageRegister&&<WageRegisterModal attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onClose={()=>setShowWageRegister(false)}/>}
       {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} onSubmit={handleShiftComplete} onClose={()=>setShiftCompleteData(null)}/>}
       {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
       {breakdownData&&<BreakdownModal machine={breakdownData.machine} onSubmit={handleBreakdownSubmit} onClose={()=>setBreakdownData(null)}/>}
-      {lineInspectionData&&<LineInspectionModal machine={lineInspectionData.machine} onSubmit={handleSubmitSettingInspection} onClose={()=>setLineInspectionData(null)}/>}
+      {lineInspectionData&&<LineInspectionModal machine={lineInspectionData.machine} mode={lineInspectionData.mode||'setting'} onSubmit={lineInspectionData.mode==='inspection'?handleLineInspectionRecord:handleSubmitSettingInspection} onClose={()=>setLineInspectionData(null)}/>}
       {repairData&&<RepairAssessmentModal machine={repairData.machine} breakdownReason={(alerts.find(a=>a.data&&a.data.category==='breakdown'&&a.data.machine===repairData.machine.name)||{}).data?.reason} onSubmit={handleRepairSubmit} onClose={()=>setRepairData(null)}/>}
       {decisionData&&(()=>{const a=alerts.find(x=>x.id===decisionData.alertId); return a&&a.data?<DecisionModal alertData={a.data} decision={decisionData.decision} onSubmit={handleDecisionSubmit} onClose={()=>setDecisionData(null)}/>:null;})()}
       {settingDecisionData&&(()=>{const a=alerts.find(x=>x.id===settingDecisionData.alertId); return a&&a.data?<SettingDecisionModal alertData={a.data} decision={settingDecisionData.decision} onSubmit={handleSettingDecision} onClose={()=>setSettingDecisionData(null)}/>:null;})()}
@@ -278,10 +363,17 @@ export default function Dashboard({currentUser,onLogout}) {
         setShowOnline={setShowOnline} setShowDownload={setShowDownload} setShowBreakdownHistory={setShowBreakdownHistory}
         setShowProd={setShowProd} setShowAssign={setShowAssign} setShowStock={setShowStock}
         setShowAttendance={setShowAttendance} setShowWageRegister={setShowWageRegister} setShowUser={setShowUser}
+        setShowMachines={setShowMachines} setShowOrders={setShowOrders} ordersAttention={ordersAttention}
+        setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
+        setShowInspections={setShowInspections}
+        view={view} setView={setView}
       />
 
       <ShiftBanner viewShift={viewShift} cfg={cfg}/>
 
+      {view==='analytics'?(
+        <AnalyticsView wageLog={wageLog} stockLog={stockLog} alerts={alerts} maintLog={maintLog} machines={machines} castingTypes={castingTypes}/>
+      ):(
       <div className="main-layout">
         <div className="content-area">
           <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} viewShift={viewShift}/>
@@ -320,6 +412,7 @@ export default function Dashboard({currentUser,onLogout}) {
           />
         </div>
       </div>
+      )}
     </div>
   );
 }

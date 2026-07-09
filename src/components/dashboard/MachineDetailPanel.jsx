@@ -75,18 +75,19 @@ export default function MachineDetailPanel({
                       <button className="md-btn" onClick={()=>setLogProgressData({machine:selectedM,pj:effectiveStage,shiftKey})}>LOG PROGRESS</button>
                       {!isManual&&selectedM.setupApplied&&!selectedM.settingApproved
                         ?(selectedM.settingApprovalStatus==='pending'
-                          ?<div className="info-box neutral" style={{marginBottom:0,fontSize:10}}>⏳ Line inspection submitted — awaiting supervisor approval</div>
+                          ?<div className="info-box neutral" style={{marginBottom:0,fontSize:10}}>⏳ Setting approval submitted — awaiting supervisor review</div>
                           :(
                             <>
                               {selectedM.settingApprovalStatus==='disapproved'&&selectedM.settingRejectionNote&&(
                                 <div className="info-box danger" style={{marginBottom:8,fontSize:10}}>✗ Rejected by supervisor: {selectedM.settingRejectionNote} — redo setup and resubmit.</div>
                               )}
-                              <button className="complete-btn" style={{background:'var(--warn)'}} onClick={()=>setLineInspectionData({machine:selectedM,shiftKey})}>SETTING APPROVED</button>
+                              <button className="complete-btn" style={{background:'var(--warn)'}} onClick={()=>setLineInspectionData({machine:selectedM,shiftKey,mode:'setting'})}>SETTING APPROVED</button>
                             </>
                           )
                         )
                         :<button className="complete-btn" onClick={()=>setShiftCompleteData({machine:selectedM,pj:effectiveStage,shiftKey})}>MARK SHIFT COMPLETE</button>
                       }
+                      {isAdmin&&<button className="md-btn" onClick={()=>setLineInspectionData({machine:selectedM,shiftKey,mode:'inspection'})}>LINE INSPECTION</button>}
                     </div>
                   )}
               </div>

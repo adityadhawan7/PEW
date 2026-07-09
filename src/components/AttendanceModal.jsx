@@ -11,13 +11,19 @@ export default function AttendanceModal({attendance,setAttendance,onClose}) {
   const operators=users.filter(u=>u.role==='operator');
   const dayRecord=attendance[date]||{};
   const [msg,setMsg]=useState('');
+  const [savingUsername,setSavingUsername]=useState(null);
 
   const setStatus=async(username,status)=>{
     const updatedDay={...dayRecord,[username]:status};
     const updated={...attendance,[date]:updatedDay};
     setAttendance(updated);
-    const ok=await fb.set('attendance',updated);
-    setMsg(ok?'Saved.':'Saved locally but Firebase sync failed.');
+    setSavingUsername(username);
+    try{
+      const ok=await fb.set('attendance',updated);
+      setMsg(ok?'Saved.':'Saved locally but Firebase sync failed.');
+    }finally{
+      setSavingUsername(null);
+    }
   };
 
   const STATUS_OPTS=[['present','Present'],['half','Half day'],['absent','Absent']];
@@ -39,7 +45,7 @@ export default function AttendanceModal({attendance,setAttendance,onClose}) {
                 </div>
                 <div style={{display:'flex',gap:4,flexShrink:0}}>
                   {STATUS_OPTS.map(([v,l])=>(
-                    <button key={v} className="small-btn" style={status===v?{background:STATUS_COLOR[v],color:'#000',borderColor:'transparent'}:{}} onClick={()=>setStatus(o.username,v)}>{l}</button>
+                    <button key={v} className="small-btn" disabled={savingUsername===o.username} style={status===v?{background:STATUS_COLOR[v],color:'#000',borderColor:'transparent'}:{}} onClick={()=>setStatus(o.username,v)}>{l}</button>
                   ))}
                 </div>
               </div>

@@ -13,7 +13,7 @@ export default function OnlineModal({sessions,sid,onClose}) {
         <div className="user-row" key={s.id}>
           <div className="user-row-avatar" style={{background:AC[s.role]||'#888'}}>{initials(s.name)}</div>
           <div className="user-row-info"><div className="user-row-name">{s.name}{s.id===sid?' (you)':''}</div><div className="user-row-meta">{s.username} · {s.role}</div></div>
-          <span style={{fontSize:10,padding:'2px 7px',borderRadius:10,background:'#00d97720',color:'var(--accent3)',fontFamily:'var(--mono)',flexShrink:0}}>● online</span>
+          <span style={{fontSize:10,padding:'2px 7px',borderRadius:10,background:'#37c97820',color:'var(--accent3)',fontFamily:'var(--mono)',flexShrink:0}}>● online</span>
         </div>
       ))}
     </Modal>

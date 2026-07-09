@@ -3,6 +3,7 @@ import Modal from './Modal.jsx';
 import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
 import { normalizeCastingTypes, routeNodeIds } from '../utils.js';
+import { confirmDialog } from '../confirmDialog.js';
 
 // ── Casting Types Modal ─────────────────────────────────────
 export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}) {
@@ -11,8 +12,10 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
   const [nodes,setNodes]=useState([]); // working copy of the node pool while editing a casting type
   const [routes,setRoutes]=useState([]); // working copy of routes (each an ordered list of steps)
   const [nodeForm,setNodeForm]=useState(null); // {editingId, name, machineType, target, shiftHours}
-  const [routeForm,setRouteForm]=useState(null); // {editingId, name, steps:[{type:'fixed',nodeId}|{type:'floating',nodeIds:[]}]}
+  const [routeForm,setRouteForm]=useState(null); // {editingId, name, steps:[{type:'fixed',nodeId}|{type:'floating',nodeIds:[]}], sideTracks:[{nodeIds,unlocksAfterStepIndex,joinsBeforeStepIndex}]}
+  const [sideTrackForm,setSideTrackForm]=useState(null); // {editingIdx, nodeIds:[], unlocksAfterStepIndex, joinsBeforeStepIndex}
   const [msg,setMsg]=useState('');
+  const [submitting,setSubmitting]=useState(false);
   const dragIdx=useRef(null);
   const dragOverIdx=useRef(null);
 
@@ -38,26 +41,31 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
     if(!routes.length) return setMsg('Add at least one route.');
     if(routes.some(r=>!r.steps.length)) return setMsg('Every route needs at least one step.');
     setMsg('Saving…');
-    // Read the latest data straight from Firestore right before merging, rather than trusting the
-    // castingTypes prop — the prop can be a render behind the live snapshot listener, which was
-    // causing newly-added casting types to occasionally get overwritten by a stale merge.
-    const latest=normalizeCastingTypes(await fb.get('casting_types').then(v=>v||castingTypes));
-    const snapshot=[...latest];
-    let updated;
-    if(editing==='new'){
-      const nextId=snapshot.length?Math.max(...snapshot.map(s=>s.id))+1:1;
-      updated=[...snapshot,{id:nextId,name,unit:form.unit,rawBalance:balance,lowThreshold:low,nodes,routes}];
-    } else {
-      updated=snapshot.map(s=>s.id===editing?{...s,name,unit:form.unit,lowThreshold:low,nodes,routes}:s);
+    setSubmitting(true);
+    try{
+      // Read the latest data straight from Firestore right before merging, rather than trusting the
+      // castingTypes prop — the prop can be a render behind the live snapshot listener, which was
+      // causing newly-added casting types to occasionally get overwritten by a stale merge.
+      const latest=normalizeCastingTypes(await fb.get('casting_types').then(v=>v||castingTypes));
+      const snapshot=[...latest];
+      let updated;
+      if(editing==='new'){
+        const nextId=snapshot.length?Math.max(...snapshot.map(s=>s.id))+1:1;
+        updated=[...snapshot,{id:nextId,name,unit:form.unit,rawBalance:balance,lowThreshold:low,nodes,routes}];
+      } else {
+        updated=snapshot.map(s=>s.id===editing?{...s,name,unit:form.unit,lowThreshold:low,nodes,routes}:s);
+      }
+      const ok=await fb.set('casting_types',updated);
+      setCastingTypes(updated);
+      setEditing(null);
+      setMsg(ok?'':'Saved locally but Firebase sync failed. Check your connection.');
+    }finally{
+      setSubmitting(false);
     }
-    const ok=await fb.set('casting_types',updated);
-    setCastingTypes(updated);
-    setEditing(null);
-    setMsg(ok?'':'Saved locally but Firebase sync failed. Check your connection.');
   };
 
   const removeType=async id=>{
-    if(!window.confirm('Remove this casting type? Machines assigned to its routes will need a new assignment.')) return;
+    if(!await confirmDialog('Remove this casting type? Machines assigned to its routes will need a new assignment.')) return;
     await persist(castingTypes.filter(s=>s.id!==id));
   };
 
@@ -91,26 +99,50 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
     setMsg('');
   };
 
-  const removeNode=nodeId=>{
+  const removeNode=async nodeId=>{
     const usedIn=routes.filter(r=>routeNodeIds(r).includes(nodeId));
-    if(usedIn.length&&!window.confirm(`This operation is used in ${usedIn.length} route${usedIn.length>1?'s':''}. Removing it will also remove it from those routes. Continue?`)) return;
+    if(usedIn.length&&!await confirmDialog(`This operation is used in ${usedIn.length} route${usedIn.length>1?'s':''}. Removing it will also remove it from those routes. Continue?`)) return;
     setNodes(nodes.filter(n=>n.nodeId!==nodeId));
     setRoutes(routes.map(r=>({
       ...r,
       steps:r.steps
         .map(s=>s.type==='fixed'?s:{...s,nodeIds:s.nodeIds.filter(id=>id!==nodeId)})
-        .filter(s=>s.type==='fixed'?s.nodeId!==nodeId:s.nodeIds.length>0)
+        .filter(s=>s.type==='fixed'?s.nodeId!==nodeId:s.nodeIds.length>0),
+      sideTracks:(r.sideTracks||[])
+        .map(st=>({...st,nodeIds:st.nodeIds.filter(id=>id!==nodeId)}))
+        .filter(st=>st.nodeIds.length>0)
     })));
   };
 
-  const startNewRoute=()=>setRouteForm({editingId:null,name:'',steps:[]});
-  const startEditRoute=r=>setRouteForm({editingId:r.routeId,name:r.name,steps:r.steps.map(s=>s.type==='fixed'?{...s}:{...s,nodeIds:[...s.nodeIds]})});
+  const startNewRoute=()=>setRouteForm({editingId:null,name:'',steps:[],sideTracks:[]});
+  const startEditRoute=r=>setRouteForm({editingId:r.routeId,name:r.name,steps:r.steps.map(s=>s.type==='fixed'?{...s}:{...s,nodeIds:[...s.nodeIds]}),sideTracks:(r.sideTracks||[]).map(st=>({...st,nodeIds:[...st.nodeIds]}))});
+
+  // Human-readable label for a step, matching how the pipe visualization names it, used in the
+  // side-track builder's "unlocks after" / "joins before" step pickers.
+  const stepLabel=step=>step.type==='fixed'
+    ?(nodes.find(x=>x.nodeId===step.nodeId)||{}).name||'?'
+    :`[${step.nodeIds.map(id=>(nodes.find(x=>x.nodeId===id)||{}).name||'?').join(' / ')}]`;
 
   const saveRoute=()=>{
     const name=routeForm.name.trim();
     if(!name) return setMsg('Route name is required.');
     if(!routeForm.steps.length) return setMsg('Add at least one step to the route.');
-    const updatedRoute={routeId:routeForm.editingId===null?(routes.length?Math.max(...routes.map(r=>r.routeId))+1:1):routeForm.editingId,name,steps:routeForm.steps};
+    const sideTracks=routeForm.sideTracks||[];
+    for(const st of sideTracks){
+      if(!st.nodeIds.length) return setMsg('Every side-track needs at least one operation.');
+      if(!Number.isInteger(st.unlocksAfterStepIndex)||!Number.isInteger(st.joinsBeforeStepIndex)) return setMsg('Every side-track needs an unlock step and a join step chosen.');
+      if(st.joinsBeforeStepIndex>=routeForm.steps.length) return setMsg('A side-track\'s join step must be one of the route\'s steps.');
+      if(st.joinsBeforeStepIndex<=st.unlocksAfterStepIndex) return setMsg('A side-track must join before a step that comes AFTER the one it unlocks after.');
+    }
+    const joinCounts={};
+    sideTracks.forEach(st=>{joinCounts[st.joinsBeforeStepIndex]=(joinCounts[st.joinsBeforeStepIndex]||0)+1;});
+    if(Object.values(joinCounts).some(c=>c>1)) return setMsg('Only one side-track may join before the same step.');
+    const backboneNodeIds=routeForm.steps.flatMap(s=>s.type==='fixed'?[s.nodeId]:s.nodeIds);
+    const sideTrackNodeIds=sideTracks.flatMap(st=>st.nodeIds);
+    if(new Set(sideTrackNodeIds).size!==sideTrackNodeIds.length) return setMsg('A node can only belong to one side-track.');
+    if(sideTrackNodeIds.some(id=>backboneNodeIds.includes(id))) return setMsg('A node used in a side-track can\'t also be used as one of the route\'s main steps.');
+
+    const updatedRoute={routeId:routeForm.editingId===null?(routes.length?Math.max(...routes.map(r=>r.routeId))+1:1):routeForm.editingId,name,steps:routeForm.steps,sideTracks};
     let updatedRoutes;
     if(routeForm.editingId===null){
       updatedRoutes=[...routes,updatedRoute];
@@ -122,8 +154,39 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
     setMsg('');
   };
 
-  const removeRoute=routeId=>{
-    if(!window.confirm('Remove this route? Machines currently assigned via this route keep their current node, but cannot be re-assigned through it again.')) return;
+  // ── Side-tracks: operations that branch off the backbone and rejoin it later — see the big
+  // comment on computeShiftCompletionUpdate in utils.js for the full semantics.
+  const startNewSideTrack=()=>setSideTrackForm({editingIdx:null,nodeIds:[],unlocksAfterStepIndex:'',joinsBeforeStepIndex:''});
+  const startEditSideTrack=idx=>{
+    const st=routeForm.sideTracks[idx];
+    setSideTrackForm({editingIdx:idx,nodeIds:[...st.nodeIds],unlocksAfterStepIndex:st.unlocksAfterStepIndex,joinsBeforeStepIndex:st.joinsBeforeStepIndex});
+  };
+  const toggleSideTrackNode=nodeId=>setSideTrackForm(f=>({...f,nodeIds:f.nodeIds.includes(nodeId)?f.nodeIds.filter(id=>id!==nodeId):[...f.nodeIds,nodeId]}));
+  const saveSideTrack=()=>{
+    if(!sideTrackForm.nodeIds.length) return setMsg('Select at least one operation for the side-track.');
+    if(sideTrackForm.unlocksAfterStepIndex===''||sideTrackForm.joinsBeforeStepIndex==='') return setMsg('Choose an unlock step and a join step.');
+    const unlocksAfterStepIndex=Number(sideTrackForm.unlocksAfterStepIndex);
+    const joinsBeforeStepIndex=Number(sideTrackForm.joinsBeforeStepIndex);
+    if(joinsBeforeStepIndex<=unlocksAfterStepIndex) return setMsg('The join step must come after the unlock step.');
+    const newSt={nodeIds:sideTrackForm.nodeIds,unlocksAfterStepIndex,joinsBeforeStepIndex};
+    const existing=routeForm.sideTracks||[];
+    const updated=sideTrackForm.editingIdx===null?[...existing,newSt]:existing.map((st,i)=>i===sideTrackForm.editingIdx?newSt:st);
+    setRouteForm({...routeForm,sideTracks:updated});
+    setSideTrackForm(null);
+    setMsg('');
+  };
+  const removeSideTrack=idx=>setRouteForm({...routeForm,sideTracks:routeForm.sideTracks.filter((_,i)=>i!==idx)});
+  const removeNodeFromSideTrack=(idx,nodeId)=>{
+    const sideTracks=[...routeForm.sideTracks];
+    const st=sideTracks[idx];
+    const updatedIds=st.nodeIds.filter(id=>id!==nodeId);
+    if(updatedIds.length) sideTracks[idx]={...st,nodeIds:updatedIds};
+    else sideTracks.splice(idx,1);
+    setRouteForm({...routeForm,sideTracks});
+  };
+
+  const removeRoute=async routeId=>{
+    if(!await confirmDialog('Remove this route? Machines currently assigned via this route keep their current node, but cannot be re-assigned through it again.')) return;
     setRoutes(routes.filter(r=>r.routeId!==routeId));
   };
 
@@ -329,6 +392,66 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
                     </div>
                   </div>
                 </div>
+
+                {routeForm.steps.length>=2&&(
+                  <div className="field" style={{marginTop:'1.25rem'}}>
+                    <label>Side-tracks — operations that branch off the backbone and rejoin it later</label>
+                    {(routeForm.sideTracks||[]).map((st,idx)=>(
+                      <div key={idx} className="pj-row pipe-node" style={{borderStyle:'dashed',flexDirection:'column',alignItems:'stretch',gap:6,marginBottom:8}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--accent)',letterSpacing:'.06em',textTransform:'uppercase'}}>
+                            ⑂ branches after {stepLabel(routeForm.steps[st.unlocksAfterStepIndex])} · rejoins before {stepLabel(routeForm.steps[st.joinsBeforeStepIndex])} ⑃
+                          </div>
+                          <div style={{display:'flex',gap:4,flexShrink:0}}>
+                            <button className="small-btn" onClick={()=>startEditSideTrack(idx)}>Edit</button>
+                            <button className="small-btn danger" onClick={()=>removeSideTrack(idx)}>Remove</button>
+                          </div>
+                        </div>
+                        {st.nodeIds.map(nodeId=>{
+                          const n=nodes.find(x=>x.nodeId===nodeId);
+                          return (
+                            <div key={nodeId} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                              <div className="pj-info">
+                                <div className="pj-name" style={{fontSize:12}}>{n?n.name:'?'}</div>
+                                <div className="pj-meta">{n?`${BADGE[n.machineType]?.lbl||n.machineType.toUpperCase()} · ${n.target}/shift`:''}</div>
+                              </div>
+                              <button className="small-btn danger" onClick={()=>removeNodeFromSideTrack(idx,nodeId)}>Remove</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                    {!sideTrackForm&&<button className="add-btn" onClick={startNewSideTrack}>+ ADD SIDE-TRACK</button>}
+
+                    {sideTrackForm&&(
+                      <div className="prod-entry">
+                        <div className="prod-entry-title">{sideTrackForm.editingIdx===null?'New side-track':'Edit side-track'}</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                          <div className="field"><label>Unlocks after step</label>
+                            <select className="mi" value={sideTrackForm.unlocksAfterStepIndex} onChange={e=>setSideTrackForm({...sideTrackForm,unlocksAfterStepIndex:Number(e.target.value)})}>
+                              <option value="">— Select step —</option>
+                              {routeForm.steps.map((step,i)=><option key={i} value={i}>{stepLabel(step)} (step {i+1})</option>)}
+                            </select>
+                          </div>
+                          <div className="field"><label>Joins before step</label>
+                            <select className="mi" value={sideTrackForm.joinsBeforeStepIndex} onChange={e=>setSideTrackForm({...sideTrackForm,joinsBeforeStepIndex:Number(e.target.value)})}>
+                              <option value="">— Select step —</option>
+                              {routeForm.steps.map((step,i)=>(sideTrackForm.unlocksAfterStepIndex===''||i>sideTrackForm.unlocksAfterStepIndex)&&<option key={i} value={i}>{stepLabel(step)} (step {i+1})</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="field">
+                          <label>Operations in this side-track — any order relative to each other and to the rest of the route</label>
+                          <div className="role-chips">
+                            {nodes.map(n=><div key={n.nodeId} className={`role-chip${sideTrackForm.nodeIds.includes(n.nodeId)?' active':''}`} onClick={()=>toggleSideTrackNode(n.nodeId)}>{n.name}</div>)}
+                          </div>
+                        </div>
+                        <div className="mi-row"><button className="add-btn" style={{background:'var(--accent)'}} onClick={saveSideTrack}>SAVE SIDE-TRACK</button><button className="can-btn" onClick={()=>setSideTrackForm(null)}>Cancel</button></div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
                 <div className="mi-row"><button className="add-btn" style={{background:'var(--accent)'}} onClick={saveRoute}>SAVE ROUTE</button><button className="can-btn" onClick={()=>setRouteForm(null)}>Cancel</button></div>
               </div>
@@ -336,7 +459,7 @@ export default function CastingTypesModal({castingTypes,setCastingTypes,onClose}
           </div>
 
           {msg&&!routeForm&&<div className="save-msg" style={{color:msg.includes('failed')?'var(--warn)':msg.includes('required')||msg.includes('greater')||msg.includes('Add at least')?'var(--danger)':'var(--accent3)'}}>{msg}</div>}
-          <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={saveType}>SAVE CASTING TYPE</button><button className="can-btn" onClick={()=>setEditing(null)}>Cancel</button></div>
+          <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={saveType} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'SAVING…':'SAVE CASTING TYPE'}</button><button className="can-btn" onClick={()=>setEditing(null)} disabled={submitting}>Cancel</button></div>
         </>
       )}
     </Modal>

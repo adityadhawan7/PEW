@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { fb } from './firebase.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import Dashboard from './components/dashboard/Dashboard.jsx';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
 
 export default function App() {
   const [currentUser,setCurrentUser]=useState(null);
@@ -74,6 +75,7 @@ export default function App() {
       {!currentUser
         ?<LoginScreen onLogin={handleLogin} revokedMsg={revokedMsg}/>
         :<Dashboard currentUser={currentUser} onLogout={handleLogout}/>}
+      <ConfirmDialog/>
     </>
   );
 }

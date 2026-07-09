@@ -16,6 +16,7 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
   const [setupHours,setSetupHours]=useState(2);
   const [selShift,setSelShift]=useState('day');
   const [msg,setMsg]=useState('');
+  const [submitting,setSubmitting]=useState(false);
   const operators=users.filter(u=>u.role==='operator');
   const cncVmc=machines.filter(m=>m.shift==='cnc_vmc').map(m=>withShift(m,selShift));
   const manualMachines=machines.filter(m=>m.shift==='manual');
@@ -36,32 +37,36 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
 
   // Finds which step (and, for floating steps, whether the node sits in a floating group) the
   // selected node belongs to in this route — needed to work out where its input comes from.
+  // A node can also live in a side-track instead of the linear steps[] — see the big comment on
+  // computeShiftCompletionUpdate in utils.js for what a side-track is.
   const stepInfo=(()=>{
     if(!routeObj||!nodeObj) return null;
     const nodeIdN=Number(nodeObj.nodeId);
     for(let i=0;i<routeObj.steps.length;i++){
       const step=routeObj.steps[i];
-      if(step.type==='fixed'&&Number(step.nodeId)===nodeIdN) return {index:i,step,isFloating:false};
-      if(step.type==='floating'&&step.nodeIds.map(Number).includes(nodeIdN)) return {index:i,step,isFloating:true};
+      if(step.type==='fixed'&&Number(step.nodeId)===nodeIdN) return {kind:'step',index:i,step,isFloating:false};
+      if(step.type==='floating'&&step.nodeIds.map(Number).includes(nodeIdN)) return {kind:'step',index:i,step,isFloating:true};
     }
+    const sideTrack=(routeObj.sideTracks||[]).find(st=>st.nodeIds.map(Number).includes(nodeIdN));
+    if(sideTrack) return {kind:'sideTrack',sideTrack,isFloating:true};
     return null;
   })();
-  const isFirstStep=stepInfo?stepInfo.index===0:false;
+  const isFirstStep=stepInfo?.kind==='step'&&stepInfo.index===0;
 
-  // Input for the chosen node: raw casting stock if it's the very first step in the route. Otherwise,
-  // for a fixed step it pulls from the WIP left by whatever came immediately before (a single node if
-  // fixed, or the floating gate if the previous step was a floating group). For a floating step, every
-  // node in that group shares the SAME input WIP (whatever unlocked the group) — but each node tracks
-  // its OWN completed count separately, since a count alone can't tell which individual pieces still
-  // need which floating operation.
+  // Input for the chosen node: raw casting stock if it's the very first step in the route.
+  // Otherwise a step's input pool is keyed by the step ITSELF — wipKey(ct, nodeId) means "pieces
+  // ready to ENTER node" (computeShiftCompletionUpdate pushes a step's output into the NEXT
+  // step's key, and consumes each step's input from its own key). A floating-group member reads
+  // the group's shared gate; a side-track member reads the side-track's own gate (fed by whichever
+  // step it "unlocks after"). Never read the previous step's key — that's the pool feeding the
+  // PREVIOUS step, not its output (an off-by-one carried over from the old prototype that made
+  // this modal show 0 available while the Stock modal correctly showed pieces waiting).
   const availableInput=(()=>{
     if(!routeObj||!nodeObj||!stepInfo) return null;
+    if(stepInfo.kind==='sideTrack') return getWip(wip,ctObj.id,`gate:${stepInfo.sideTrack.nodeIds[0]}`);
     if(isFirstStep) return ctObj.rawBalance;
-    const prevStep=routeObj.steps[stepInfo.index-1];
-    if(prevStep.type==='fixed') return getWip(wip,ctObj.id,prevStep.nodeId);
-    // Previous step was a floating group: its "release" WIP key is keyed by the group's gate id —
-    // we use the first nodeId in that floating group as a stable gate identifier.
-    return getWip(wip,ctObj.id,`gate:${prevStep.nodeIds[0]}`);
+    if(stepInfo.isFloating) return getWip(wip,ctObj.id,`gate:${stepInfo.step.nodeIds[0]}`);
+    return getWip(wip,ctObj.id,nodeObj.nodeId);
   })();
 
   const hasRate=nodeObj&&nodeObj.ratePerHour&&nodeObj.shiftHours;
@@ -74,14 +79,19 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
     if(needsSetup&&!hasRate) return setMsg('This operation has no units/hour rate set — edit it in Casting types first, or turn off setup adjustment.');
     const opUser=users.find(u=>u.username===selOp);
     const finalTarget=needsSetup&&hasRate?adjustedTarget:nodeObj.target;
-    const updated=patchMachineShift(machines,selM,selShift,{
-      castingTypeId:Number(selCt),routeId:Number(selRouteId),nodeId:Number(selNodeId),prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
-      assignedOperator:selOp,operator:opUser?opUser.name:selOp,status:'running',progress:0,output:0,
-      setupApplied:needsSetup,setupHoursUsed:needsSetup?Number(setupHours):0,adjustedTarget:needsSetup?finalTarget:null,
-      settingApproved:false,lineInspection:null,settingApprovalStatus:null,settingRejectionNote:null
-    });
-    setMachines(updated); await fb.set('machines',updated);
-    setMsg('Assigned!'); setSelM(''); setSelOp(''); setSelCt(''); setSelRouteId(''); setSelNodeId(''); setNeedsSetup(false); setSetupHours(2);
+    setSubmitting(true);
+    try{
+      const updated=patchMachineShift(machines,selM,selShift,{
+        castingTypeId:Number(selCt),routeId:Number(selRouteId),nodeId:Number(selNodeId),prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
+        assignedOperator:selOp,operator:opUser?opUser.name:selOp,status:'running',progress:0,output:0,
+        setupApplied:needsSetup,setupHoursUsed:needsSetup?Number(setupHours):0,adjustedTarget:needsSetup?finalTarget:null,
+        settingApproved:false,lineInspection:null,settingApprovalStatus:null,settingRejectionNote:null
+      });
+      setMachines(updated); await fb.set('machines',updated);
+      setMsg('Assigned!'); setSelM(''); setSelOp(''); setSelCt(''); setSelRouteId(''); setSelNodeId(''); setNeedsSetup(false); setSetupHours(2);
+    }finally{
+      setSubmitting(false);
+    }
   };
   const clear=async mid=>{
     const updated=patchMachineShift(machines,mid,selShift,{assignedOperator:null});
@@ -136,7 +146,8 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
             <option value="">— Select step —</option>
             {eligibleNodes.map(n=>{
               const inFloating=routeObj.steps.some(s=>s.type==='floating'&&s.nodeIds.map(Number).includes(Number(n.nodeId)));
-              return <option key={n.nodeId} value={n.nodeId}>{n.name} ({n.target}/shift){inFloating?' · floating':''}</option>;
+              const inSideTrack=(routeObj.sideTracks||[]).some(st=>st.nodeIds.map(Number).includes(Number(n.nodeId)));
+              return <option key={n.nodeId} value={n.nodeId}>{n.name} ({n.target}/shift){inFloating?' · floating':''}{inSideTrack?' · side-track':''}</option>;
             })}
           </select>
           {!eligibleNodes.length&&<div style={{fontSize:10,color:'var(--text3)',marginTop:4,fontFamily:'var(--mono)'}}>This route has no step on {mObj&&BADGE[mObj.type].lbl}</div>}
@@ -145,7 +156,7 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
 
       {nodeObj&&stepInfo&&(
         <div className="info-box neutral" style={{marginBottom:'1rem'}}>
-          {isFirstStep?'Pulls from raw casting stock':stepInfo.isFloating?'Pulls from the floating group\'s shared pool (any floating step in this group can be done in any order)':'Pulls from WIP left by the previous step'}: <b style={{color:'var(--text)'}}>{availableInput} {ctObj.unit} available</b>
+          {isFirstStep?'Pulls from raw casting stock':stepInfo.kind==='sideTrack'?'Pulls from the side-track\'s shared pool (unlocked once its trigger step finishes — this can be done any time relative to the rest of the route)':stepInfo.isFloating?'Pulls from the floating group\'s shared pool (any floating step in this group can be done in any order)':'Pulls from WIP left by the previous step'}: <b style={{color:'var(--text)'}}>{availableInput} {ctObj.unit} available</b>
           {availableInput<nodeObj.target&&<div style={{marginTop:4,color:'var(--warn)'}}>⚠ Less input available than this operation's full-shift target — operator may run out mid-shift.</div>}
         </div>
       )}
@@ -176,7 +187,7 @@ export default function AssignModal({machines,setMachines,castingTypes,wip,onClo
       )}
 
       {msg&&<div className="save-msg" style={{color:msg.includes('Select')||msg.includes('rate')?'var(--danger)':'var(--accent3)'}}>{msg}</div>}
-      <button className="add-btn" onClick={assign}>ASSIGN →</button>
+      <button className="add-btn" onClick={assign} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'ASSIGNING…':'ASSIGN →'}</button>
 
       {active.length>0&&(
         <>

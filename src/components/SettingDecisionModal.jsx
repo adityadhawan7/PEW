@@ -10,7 +10,7 @@ export default function SettingDecisionModal({alertData,decision,onSubmit,onClos
     <Modal onClose={onClose} title={isApprove?'Approve setting inspection':'Reject setting inspection'} wide>
       <div className="info-box neutral" style={{marginBottom:'1rem'}}>
         <div>{alertData.machine} · {alertData.operator}</div>
-        <div style={{marginTop:2,color:'var(--text2)'}}>{alertData.shiftKey==='night'?'Night':'Day'} shift — line inspection submitted for review</div>
+        <div style={{marginTop:2,color:'var(--text2)'}}>{alertData.shiftKey==='night'?'Night':'Day'} shift — setting approval submitted for review</div>
       </div>
       {filledRows.length>0?(
         <table className="insp-table" style={{marginBottom:'1rem'}}>

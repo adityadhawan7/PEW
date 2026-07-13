@@ -2,22 +2,17 @@ import React, { useState } from 'react';
 import Modal from './Modal.jsx';
 import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
-import { todayStr, nowStr, fullTs, routeNodeIds, getWip, applyDispatchToOrder } from '../utils.js';
+import { todayStr, nowStr, fullTs, routeNodeIds, getWip, applyDispatchToOrder, finishedOnHand } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
 // ── Stock Modal ────────────────────────────────────────────
-export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stockLog,setStockLog,orders,writeOrders,onClose}) {
-  const [inForm,setInForm]=useState({typeId:'',qty:'',supplier:'',note:''});
+export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stockLog,setStockLog,orders,writeOrders,assemblyModels,purchasedComponents,writePurchasedComponents,onClose}) {
+  const [inForm,setInForm]=useState({kind:'casting',typeId:'',qty:'',supplier:'',note:''});
   const [inMsg,setInMsg]=useState('');
   const [outForm,setOutForm]=useState({typeId:'',qty:'',orderId:'',customer:'',note:''});
   const [outMsg,setOutMsg]=useState('');
   const [tab,setTab]=useState('balances');
   const [submitting,setSubmitting]=useState(false);
-
-  // Finished goods on hand = cumulative finished − cumulative dispatched (both monotonic
-  // counters in the wip map — see the 'entered'/'finished' comments in utils.js). Floored at 0
-  // because shifts completed before these counters existed never incremented 'finished'.
-  const finishedOnHand=ct=>Math.max(0,Math.round((getWip(wip,ct.id,'finished')-getWip(wip,ct.id,'dispatched'))*100)/100);
 
   const persistTypes=async updated=>{ setCastingTypes(updated); await fb.set('casting_types',updated); };
   const persistLog=async updated=>{ setStockLog(updated); await fb.set('stock_log',updated); };
@@ -25,17 +20,26 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
   const logIn=async()=>{
     setInMsg('');
     const qty=Number(inForm.qty);
-    if(!inForm.typeId) return setInMsg('Select a casting type.');
+    if(!inForm.typeId) return setInMsg(inForm.kind==='purchased'?'Select a purchased component.':'Select a casting type.');
     if(!qty||qty<=0||isNaN(qty)) return setInMsg('Quantity must be a number greater than 0.');
-    const ct=castingTypes.find(s=>s.id===Number(inForm.typeId));
-    if(!ct) return setInMsg('Casting type not found.');
     setSubmitting(true);
     try{
-      const updatedTypes=castingTypes.map(s=>s.id===ct.id?{...s,rawBalance:Math.round((s.rawBalance+qty)*100)/100}:s);
-      const entry={id:Date.now(),type:'in',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty,supplier:inForm.supplier.trim(),note:inForm.note.trim(),date:todayStr(),time:nowStr(),ts:fullTs()};
-      await persistTypes(updatedTypes);
-      await persistLog([entry,...stockLog].slice(0,500));
-      setInForm({typeId:inForm.typeId,qty:'',supplier:'',note:''});
+      if(inForm.kind==='purchased'){
+        const pc=purchasedComponents.find(p=>p.id===Number(inForm.typeId));
+        if(!pc) return setInMsg('Purchased component not found.');
+        const updatedComponents=purchasedComponents.map(p=>p.id===pc.id?{...p,balance:Math.round((p.balance+qty)*100)/100}:p);
+        const entry={id:Date.now(),type:'in',itemId:pc.id,itemName:pc.name,unit:pc.unit,qty,supplier:inForm.supplier.trim()||pc.vendor,note:inForm.note.trim(),date:todayStr(),time:nowStr(),ts:fullTs()};
+        writePurchasedComponents(updatedComponents);
+        await persistLog([entry,...stockLog].slice(0,500));
+      } else {
+        const ct=castingTypes.find(s=>s.id===Number(inForm.typeId));
+        if(!ct) return setInMsg('Casting type not found.');
+        const updatedTypes=castingTypes.map(s=>s.id===ct.id?{...s,rawBalance:Math.round((s.rawBalance+qty)*100)/100}:s);
+        const entry={id:Date.now(),type:'in',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty,supplier:inForm.supplier.trim(),note:inForm.note.trim(),date:todayStr(),time:nowStr(),ts:fullTs()};
+        await persistTypes(updatedTypes);
+        await persistLog([entry,...stockLog].slice(0,500));
+      }
+      setInForm({kind:inForm.kind,typeId:'',qty:'',supplier:'',note:''});
       setInMsg('Stock added.');
     }finally{
       setSubmitting(false);
@@ -58,7 +62,7 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
     if(!qty||qty<=0||isNaN(qty)) return setOutMsg('Quantity must be a number greater than 0.');
     const ct=castingTypes.find(s=>s.id===Number(outForm.typeId));
     if(!ct) return setOutMsg('Casting type not found.');
-    const onHand=finishedOnHand(ct);
+    const onHand=finishedOnHand(wip,ct.id);
     // Allow over-deduction after a warning: stock finished before the counters existed is
     // physically real but invisible to 'finished', so a hard block would strand it.
     if(qty>onHand&&!await confirmDialog(`Only ${onHand} ${ct.unit} of finished ${ct.name} are tracked as on hand. Deduct ${qty} anyway? (Finished stock made before tracking started isn't counted — this is fine if the pieces physically exist.)`)) return;
@@ -253,36 +257,105 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
                     <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--accent3)',textTransform:'uppercase',letterSpacing:'.06em'}}>Finished goods ready for dispatch</div>
                     <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>Deduct via the Stock out tab when dispatched/sold</div>
                   </div>
-                  <div style={{fontSize:14,fontWeight:500,color:finishedOnHand(ct)>0?'var(--accent3)':'var(--text3)'}}>{finishedOnHand(ct)} {ct.unit}</div>
+                  <div style={{fontSize:14,fontWeight:500,color:finishedOnHand(wip,ct.id)>0?'var(--accent3)':'var(--text3)'}}>{finishedOnHand(wip,ct.id)} {ct.unit}</div>
                 </div>
               </div>
             </div>
           ))}
           {!castingTypes.length&&<div className="empty">No casting types yet — add one in Casting types</div>}
+
+          {purchasedComponents?.length>0&&(
+            <>
+              <div style={{fontSize:12,fontWeight:600,margin:'18px 0 6px'}}>Purchased components</div>
+              {purchasedComponents.map(pc=>(
+                <div key={pc.id} className="pipe-node pipe-raw" style={{marginBottom:4}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div>
+                      <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.06em'}}>{pc.name}</div>
+                      <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>Vendor: {pc.vendor||'—'} · Low-stock alert under {pc.lowThreshold} {pc.unit}</div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:500,color:pc.balance<=pc.lowThreshold?'var(--danger)':'var(--text)'}}>{pc.balance} {pc.unit}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {assemblyModels?.length>0&&(
+            <>
+              <div style={{fontSize:12,fontWeight:600,margin:'18px 0 6px'}}>Assembly models</div>
+              {assemblyModels.map(am=>{
+                const built=getWip(wip,`asm:${am.id}`,'finished');
+                const scrapped=getWip(wip,`asm:${am.id}`,'scrapped');
+                const dispatched=getWip(wip,`asm:${am.id}`,'dispatched');
+                const onHand=Math.max(0,Math.round((built-dispatched)*100)/100);
+                return (
+                  <div key={am.id} className="pipe-node pipe-raw" style={{marginBottom:4}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <div>
+                        <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',textTransform:'uppercase',letterSpacing:'.06em'}}>{am.name}</div>
+                        <div style={{fontSize:10,color:'var(--text3)',marginTop:2}}>Built to date: {built} {am.unit} · Scrapped: {scrapped} {am.unit}</div>
+                      </div>
+                      <div style={{fontSize:14,fontWeight:500,color:onHand>0?'var(--accent3)':'var(--text3)'}}>{onHand} {am.unit} on hand</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </>
       )}
 
       {tab==='in'&&(
         <>
-          <p className="modal-note">Record pre-cast material received from the foundry. This adds directly to the casting type's raw balance.</p>
-          <div className="field"><label>Casting type</label>
-            <select className="mi" value={inForm.typeId} onChange={e=>setInForm({...inForm,typeId:e.target.value})}>
-              <option value="">— Select casting type —</option>
-              {castingTypes.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rawBalance} {s.unit} in stock)</option>)}
-            </select>
-          </div>
-          <div className="field"><label>Quantity received {inForm.typeId?`(${(castingTypes.find(s=>s.id===Number(inForm.typeId))||{}).unit||''})`:''}</label>
-            <input className="mi" type="number" min="0" step="1" value={inForm.qty} onChange={e=>setInForm({...inForm,qty:e.target.value})} placeholder="e.g. 100"/>
-          </div>
-          <div className="field"><label>Supplier / foundry (used by the foundry scorecard — keep names consistent)</label>
-            <input className="mi" list="supplier-names" value={inForm.supplier} onChange={e=>setInForm({...inForm,supplier:e.target.value})} placeholder="e.g. Rajasthan Foundry Co."/>
-            <datalist id="supplier-names">
-              {[...new Set(stockLog.filter(e=>e.type==='in'&&(e.supplier||'').trim()).map(e=>e.supplier.trim()))].map(s=><option key={s} value={s}/>)}
-            </datalist>
-          </div>
-          <div className="field"><label>Note (optional)</label><input className="mi" value={inForm.note} onChange={e=>setInForm({...inForm,note:e.target.value})} placeholder="e.g. PO #4521"/></div>
-          {inMsg&&<div className="save-msg" style={{color:inMsg.includes('Select')||inMsg.includes('greater')?'var(--danger)':'var(--accent3)'}}>{inMsg}</div>}
-          <button className="add-btn" onClick={logIn} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'ADDING…':'+ ADD STOCK'}</button>
+          {purchasedComponents?.length>0&&(
+            <div className="role-chips" style={{marginBottom:10}}>
+              <div className={`role-chip${inForm.kind==='casting'?' active':''}`} onClick={()=>setInForm({kind:'casting',typeId:'',qty:'',supplier:'',note:''})}>Casting type</div>
+              <div className={`role-chip${inForm.kind==='purchased'?' active':''}`} onClick={()=>setInForm({kind:'purchased',typeId:'',qty:'',supplier:'',note:''})}>Purchased component</div>
+            </div>
+          )}
+          {inForm.kind==='purchased'?(
+            <>
+              <p className="modal-note">Record vendor-supplied parts received. This adds directly to the component's balance.</p>
+              <div className="field"><label>Purchased component</label>
+                <select className="mi" value={inForm.typeId} onChange={e=>setInForm({...inForm,typeId:e.target.value})}>
+                  <option value="">— Select component —</option>
+                  {purchasedComponents.map(pc=><option key={pc.id} value={pc.id}>{pc.name} ({pc.balance} {pc.unit} in stock)</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Quantity received {inForm.typeId?`(${(purchasedComponents.find(p=>p.id===Number(inForm.typeId))||{}).unit||''})`:''}</label>
+                <input className="mi" type="number" min="0" step="1" value={inForm.qty} onChange={e=>setInForm({...inForm,qty:e.target.value})} placeholder="e.g. 100"/>
+              </div>
+              <div className="field"><label>Vendor (optional — defaults to the component's saved vendor)</label>
+                <input className="mi" value={inForm.supplier} onChange={e=>setInForm({...inForm,supplier:e.target.value})} placeholder={(purchasedComponents.find(p=>p.id===Number(inForm.typeId))||{}).vendor||'e.g. Acme Vendor'}/>
+              </div>
+              <div className="field"><label>Note (optional)</label><input className="mi" value={inForm.note} onChange={e=>setInForm({...inForm,note:e.target.value})} placeholder="e.g. PO #4521"/></div>
+              {inMsg&&<div className="save-msg" style={{color:inMsg.includes('Select')||inMsg.includes('greater')?'var(--danger)':'var(--accent3)'}}>{inMsg}</div>}
+              <button className="add-btn" onClick={logIn} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'ADDING…':'+ ADD STOCK'}</button>
+            </>
+          ):(
+            <>
+              <p className="modal-note">Record pre-cast material received from the foundry. This adds directly to the casting type's raw balance.</p>
+              <div className="field"><label>Casting type</label>
+                <select className="mi" value={inForm.typeId} onChange={e=>setInForm({...inForm,typeId:e.target.value})}>
+                  <option value="">— Select casting type —</option>
+                  {castingTypes.map(s=><option key={s.id} value={s.id}>{s.name} ({s.rawBalance} {s.unit} in stock)</option>)}
+                </select>
+              </div>
+              <div className="field"><label>Quantity received {inForm.typeId?`(${(castingTypes.find(s=>s.id===Number(inForm.typeId))||{}).unit||''})`:''}</label>
+                <input className="mi" type="number" min="0" step="1" value={inForm.qty} onChange={e=>setInForm({...inForm,qty:e.target.value})} placeholder="e.g. 100"/>
+              </div>
+              <div className="field"><label>Supplier / foundry (used by the foundry scorecard — keep names consistent)</label>
+                <input className="mi" list="supplier-names" value={inForm.supplier} onChange={e=>setInForm({...inForm,supplier:e.target.value})} placeholder="e.g. Rajasthan Foundry Co."/>
+                <datalist id="supplier-names">
+                  {[...new Set(stockLog.filter(e=>e.type==='in'&&(e.supplier||'').trim()).map(e=>e.supplier.trim()))].map(s=><option key={s} value={s}/>)}
+                </datalist>
+              </div>
+              <div className="field"><label>Note (optional)</label><input className="mi" value={inForm.note} onChange={e=>setInForm({...inForm,note:e.target.value})} placeholder="e.g. PO #4521"/></div>
+              {inMsg&&<div className="save-msg" style={{color:inMsg.includes('Select')||inMsg.includes('greater')?'var(--danger)':'var(--accent3)'}}>{inMsg}</div>}
+              <button className="add-btn" onClick={logIn} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'ADDING…':'+ ADD STOCK'}</button>
+            </>
+          )}
         </>
       )}
 
@@ -292,7 +365,7 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
           <div className="field"><label>Casting type</label>
             <select className="mi" value={outForm.typeId} onChange={e=>setOutForm({...outForm,typeId:e.target.value,orderId:''})}>
               <option value="">— Select casting type —</option>
-              {castingTypes.map(s=><option key={s.id} value={s.id}>{s.name} ({finishedOnHand(s)} {s.unit} finished on hand)</option>)}
+              {castingTypes.map(s=><option key={s.id} value={s.id}>{s.name} ({finishedOnHand(wip,s.id)} {s.unit} finished on hand)</option>)}
             </select>
           </div>
           {outForm.typeId!==''&&openOrdersForType(outForm.typeId).length>0&&(

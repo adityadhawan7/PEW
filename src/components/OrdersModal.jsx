@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Modal from './Modal.jsx';
-import { todayStr, getWip, orderDueState, orderProgress } from '../utils.js';
+import { todayStr, orderDueState, orderProgress, finishedOnHand } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
 // ── Orders Modal ───────────────────────────────────────────
@@ -14,8 +14,6 @@ export default function OrdersModal({orders,writeOrders,castingTypes,wip,current
 
   const ctName=id=>castingTypes.find(c=>Number(c.id)===Number(id))?.name||`removed type #${id}`;
   const ctUnit=id=>castingTypes.find(c=>Number(c.id)===Number(id))?.unit||'pcs';
-  const finishedOnHand=ctId=>Math.max(0,Math.round((getWip(wip,ctId,'finished')-getWip(wip,ctId,'dispatched'))*100)/100);
-
   const today=todayStr();
   const stateRank={overdue:0,dueSoon:1,ok:2};
   const visible=orders
@@ -116,7 +114,7 @@ export default function OrdersModal({orders,writeOrders,castingTypes,wip,current
                         <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--text2)',gap:8}}>
                           <span>{ctName(it.castingTypeId)}</span>
                           <span style={{whiteSpace:'nowrap',color:(it.dispatched||0)>=it.qty?'var(--accent3)':'var(--text2)'}}>
-                            {it.dispatched||0}/{it.qty} {ctUnit(it.castingTypeId)}{o.status==='open'?` · ${finishedOnHand(it.castingTypeId)} finished on hand`:''}
+                            {it.dispatched||0}/{it.qty} {ctUnit(it.castingTypeId)}{o.status==='open'?` · ${finishedOnHand(wip,it.castingTypeId)} finished on hand`:''}
                           </span>
                         </div>
                       ))}

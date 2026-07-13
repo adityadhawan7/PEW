@@ -1,6 +1,6 @@
-import { withShift, resolveStage } from '../utils.js';
+import { withShift, resolveJob } from '../utils.js';
 
-export default function AssignmentBanner({user,machines,castingTypes,viewShift}) {
+export default function AssignmentBanner({user,machines,castingTypes,assemblyModels,viewShift}) {
   if(user.role!=='operator') return null;
   const mine=machines.map(m=>withShift(m,viewShift)).filter(m=>m.assignedOperator===user.username);
   if(!mine.length) return null;
@@ -11,11 +11,14 @@ export default function AssignmentBanner({user,machines,castingTypes,viewShift})
       </div>
       <div className="pj-list">
         {mine.map(m=>{
-          const {ct,stage,route}=resolveStage(castingTypes,m);
-          const target=m.setupApplied&&m.adjustedTarget?m.adjustedTarget:stage?stage.target:null;
+          const job=resolveJob(castingTypes,assemblyModels,m);
+          const target=job.kind==='casting'?(m.setupApplied&&m.adjustedTarget?m.adjustedTarget:job.stage.target):job.kind==='assembly'?job.model.target:null;
+          const label=job.kind==='casting'?`${job.ct.name} — ${job.route?job.route.name:''} (${job.stage.name}) — target ${target}/shift`
+            :job.kind==='assembly'?`${job.model.name} — target ${target}/shift`
+            :'No job set';
           return (
             <div className="pj-row" key={m.id}>
-              <div className="pj-info"><div className="pj-name">{m.id} · {m.name}</div><div className="pj-meta">{ct&&stage?`${ct.name} — ${route?route.name:''} (${stage.name}) — target ${target}/shift`:'No job set'}</div></div>
+              <div className="pj-info"><div className="pj-name">{m.id} · {m.name}</div><div className="pj-meta">{label}</div></div>
               <div className="pj-target" style={{color:m.shiftComplete?(m.prodCount>=target?'var(--accent3)':'var(--danger)'):'var(--text2)'}}>{m.prodCount}/{target??'—'}</div>
             </div>
           );

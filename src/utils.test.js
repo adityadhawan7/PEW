@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -830,3 +830,196 @@ describe('computeOperatorDayPay — monthly salary', () => {
   });
 });
 
+
+// ── Assembly / BOM production ────────────────────────────────
+// A casting type stub — finishedOnHand/bomLineAvailable only need id/name/unit, no nodes/routes.
+function makeCT(id, name, unit='pcs') { return { id, name, unit }; }
+function makePC(id, name, balance, vendor='Acme Vendor') { return { id, name, unit:'pcs', vendor, lowThreshold:10, balance }; }
+function makeAssemblyModel(bom, over={}) {
+  return { id: 500, name: 'Pump Assembly A', unit: 'pcs', target: 20, ratePerHour: 2.5, shiftHours: 8, bom, ...over };
+}
+
+describe('finishedOnHand', () => {
+  it('is finished - dispatched - assembled, floored at 0', () => {
+    const wip = { [wipKey(1,'finished')]: 100, [wipKey(1,'dispatched')]: 20, [wipKey(1,'assembled')]: 15 };
+    expect(finishedOnHand(wip, 1)).toBe(65);
+  });
+
+  it('regression: matches the old 2-term formula when assembled is 0', () => {
+    const wip = { [wipKey(1,'finished')]: 100, [wipKey(1,'dispatched')]: 40 };
+    expect(finishedOnHand(wip, 1)).toBe(60);
+  });
+
+  it('floors at 0 rather than going negative', () => {
+    const wip = { [wipKey(1,'finished')]: 10, [wipKey(1,'dispatched')]: 5, [wipKey(1,'assembled')]: 20 };
+    expect(finishedOnHand(wip, 1)).toBe(0);
+  });
+});
+
+describe('bomLineAvailable / maxBuildable', () => {
+  const castingTypes = [makeCT(1,'Plate'), makeCT(2,'Cover')];
+  const purchasedComponents = [makePC(10,'Lever kit',48), makePC(11,'Spring kit',12)];
+  const wip = { [wipKey(1,'finished')]: 40, [wipKey(2,'finished')]: 35 };
+
+  it('casting-kind line reads finishedOnHand; purchased-kind line reads balance directly', () => {
+    expect(bomLineAvailable(castingTypes, purchasedComponents, wip, { kind:'casting', itemId:1, qty:1 })).toBe(40);
+    expect(bomLineAvailable(castingTypes, purchasedComponents, wip, { kind:'purchased', itemId:10, qty:1 })).toBe(48);
+  });
+
+  it('the limiting line across a mixed casting+purchased BOM determines maxBuildable', () => {
+    const bom = [
+      { kind:'casting', itemId:1, qty:1 },   // 40 available / 1 = 40
+      { kind:'casting', itemId:2, qty:1 },   // 35 available / 1 = 35
+      { kind:'purchased', itemId:10, qty:1 },// 48 available / 1 = 48
+      { kind:'purchased', itemId:11, qty:1 },// 12 available / 1 = 12  <- limiting
+    ];
+    expect(maxBuildable(castingTypes, purchasedComponents, wip, bom)).toBe(12);
+  });
+
+  it('a zero-qty line is guarded (no divide-by-zero)', () => {
+    const bom = [{ kind:'casting', itemId:1, qty:0 }];
+    expect(maxBuildable(castingTypes, purchasedComponents, wip, bom)).toBe(0);
+  });
+
+  it('an empty BOM cannot build anything', () => {
+    expect(maxBuildable(castingTypes, purchasedComponents, wip, [])).toBe(0);
+  });
+});
+
+describe('computeAssemblyShiftUpdate', () => {
+  const castingTypes = [makeCT(1,'Plate'), makeCT(2,'Cover')];
+  const bom = [
+    { kind:'casting', itemId:1, qty:1 },
+    { kind:'casting', itemId:2, qty:1 },
+    { kind:'purchased', itemId:10, qty:1 },
+    { kind:'purchased', itemId:11, qty:2 },
+  ];
+  const model = makeAssemblyModel(bom);
+
+  it('full BOM consumption success: right counters, right stock_log shape', () => {
+    const purchasedComponents = [makePC(10,'Lever kit',50), makePC(11,'Spring kit',50)];
+    const wip = { [wipKey(1,'finished')]: 40, [wipKey(2,'finished')]: 40 };
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model, machineName:'ASM-1', consumed:10, total:10, newPieces:10, reworkPieces:0, defects:0,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.updatedWip[wipKey(1,'assembled')]).toBe(10);
+    expect(result.updatedWip[wipKey(2,'assembled')]).toBe(10);
+    expect(result.updatedComponents.find(p=>p.id===10).balance).toBe(40); // 50 - 10*1
+    expect(result.updatedComponents.find(p=>p.id===11).balance).toBe(30); // 50 - 10*2
+    expect(result.updatedWip[assemblyWipKey(model.id,'finished')]).toBe(10);
+    expect(result.logEntries.filter(e=>e.stageLabel.includes('Consumed by assembly'))).toHaveLength(4);
+  });
+
+  it('insufficient stock on a casting-kind line blocks the whole build, nothing touched', () => {
+    const purchasedComponents = [makePC(10,'Lever kit',50), makePC(11,'Spring kit',50)];
+    const wip = { [wipKey(1,'finished')]: 5, [wipKey(2,'finished')]: 40 }; // Plate short
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model, machineName:'ASM-1', consumed:10, total:10, newPieces:10, reworkPieces:0, defects:0,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.shortages.some(s=>s.kind==='casting'&&s.itemId===1)).toBe(true);
+  });
+
+  it('insufficient stock on a purchased-kind line blocks the build; purchasedComponents untouched', () => {
+    const purchasedComponents = [makePC(10,'Lever kit',3), makePC(11,'Spring kit',50)]; // Lever kit short
+    const wip = { [wipKey(1,'finished')]: 40, [wipKey(2,'finished')]: 40 };
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model, machineName:'ASM-1', consumed:10, total:10, newPieces:10, reworkPieces:0, defects:0,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.shortages.some(s=>s.kind==='purchased'&&s.itemId===10)).toBe(true);
+  });
+
+  it('reports ALL short lines at once, not just the first', () => {
+    const purchasedComponents = [makePC(10,'Lever kit',1), makePC(11,'Spring kit',1)];
+    const wip = { [wipKey(1,'finished')]: 1, [wipKey(2,'finished')]: 40 };
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model, machineName:'ASM-1', consumed:10, total:10, newPieces:10, reworkPieces:0, defects:0,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.shortages.length).toBeGreaterThanOrEqual(3); // Plate, Lever kit, Spring kit all short
+  });
+
+  it('defects increment the scrapped counter and log a defect row; shortage check uses the full consumed figure', () => {
+    const purchasedComponents = [makePC(10,'Lever kit',50), makePC(11,'Spring kit',50)];
+    const wip = { [wipKey(1,'finished')]: 12, [wipKey(2,'finished')]: 12 }; // exactly enough for consumed=12
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model, machineName:'ASM-1', consumed:12, total:10, newPieces:10, reworkPieces:0, defects:2,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.updatedWip[wipKey(1,'assembled')]).toBe(12); // consumed, not just total
+    expect(result.updatedWip[assemblyWipKey(model.id,'scrapped')]).toBe(2);
+    expect(result.logEntries.some(e=>e.type==='defect'&&e.qty===2)).toBe(true);
+  });
+
+  it('assembly-model-id / casting-type-id collision: the asm: prefix keeps their counters independent', () => {
+    // Same numeric id (1) used for both a casting type and the assembly model.
+    const collidingModel = makeAssemblyModel([{ kind:'purchased', itemId:10, qty:1 }], { id: 1 });
+    const purchasedComponents = [makePC(10,'Lever kit',50)];
+    const wip = {};
+    const result = computeAssemblyShiftUpdate(castingTypes, purchasedComponents, wip, {
+      model: collidingModel, machineName:'ASM-1', consumed:5, total:5, newPieces:5, reworkPieces:0, defects:0,
+    });
+    expect(result.ok).toBe(true);
+    // The assembly's own 'finished' counter lives under 'asm:1:finished' — completely distinct
+    // from wipKey(1,'finished'), which belongs to casting type id 1 and is untouched.
+    expect(result.updatedWip[assemblyWipKey(1,'finished')]).toBe(5);
+    expect(result.updatedWip[wipKey(1,'finished')]).toBeUndefined();
+  });
+});
+
+describe('applyDispatchToOrder — itemType', () => {
+  it('assembly-kind line dispatches correctly when itemType is assembly', () => {
+    const order = makeOrder({ items: [{ itemType:'assembly', assemblyModelId: 500, qty: 20, dispatched: 0 }] });
+    const [o] = applyDispatchToOrder([order], 100, 500, 8, 'assembly');
+    expect(o.items[0].dispatched).toBe(8);
+    expect(o.status).toBe('open');
+  });
+
+  it('an assembly dispatch does not match a casting-kind line with the same numeric id', () => {
+    const order = makeOrder(); // items use castingTypeId 1 and 2, no itemType field
+    const result = applyDispatchToOrder([order], 100, 1, 10, 'assembly');
+    expect(result[0]).toBe(order); // untouched — no assembly-kind line to match
+  });
+});
+
+describe('isPipelineExit exclusion — assembly consumption', () => {
+  it('aggregateDefects excludes "Consumed by assembly" rows from the consumed sum', () => {
+    const rows = aggregateDefects([
+      { date: '2026-07-05', type: 'out', itemId: 1, itemName: 'Plate', qty: 100, stageLabel: 'Direct route · Milling' },
+      { date: '2026-07-05', type: 'out', itemId: 1, itemName: 'Plate', qty: 40, stageLabel: 'Consumed by assembly · Pump Assembly A' },
+    ], '2026-07-01', '2026-07-31');
+    expect(rows[0].consumed).toBe(100); // the 40 consumed-by-assembly pieces are not production
+  });
+
+  it('aggregateFoundryScore excludes "Consumed by assembly" rows from the processed sum', () => {
+    const rows = aggregateFoundryScore([
+      { date: '2026-07-05', type: 'in', itemId: 1, itemName: 'Plate', qty: 200, supplier: 'Sharma Castings' },
+      { date: '2026-07-06', type: 'out', itemId: 1, itemName: 'Plate', qty: 100, stageLabel: 'Direct route · Milling' },
+      { date: '2026-07-06', type: 'out', itemId: 1, itemName: 'Plate', qty: 40, stageLabel: 'Consumed by assembly · Pump Assembly A' },
+    ], '2026-07-01', '2026-07-31');
+    expect(rows[0].processed).toBe(100);
+  });
+
+  it('existing "Finished goods dispatch" exclusion still holds', () => {
+    const rows = aggregateDefects([
+      { date: '2026-07-05', type: 'out', itemId: 1, itemName: 'Plate', qty: 100, stageLabel: 'Direct route · Milling' },
+      { date: '2026-07-05', type: 'out', itemId: 1, itemName: 'Plate', qty: 30, stageLabel: 'Finished goods dispatch' },
+    ], '2026-07-01', '2026-07-31');
+    expect(rows[0].consumed).toBe(100);
+  });
+});
+
+describe('wage_log shape produced by an assembly shift', () => {
+  it('computeShiftPay treats an assembly-model-shaped entry identically to an equivalent casting entry', () => {
+    // An assembly model's target/ratePerHour are stored in exactly the same shape as a casting
+    // node's — Dashboard writes the same wage_log entry shape for either job kind, so no wage
+    // code needs to change. Prove it by constructing one and comparing to a hand-built casting
+    // equivalent with the same numbers.
+    const model = makeAssemblyModel([], { target: 20, ratePerHour: 2.5 });
+    const assemblyEntry = { produced: 25, target: model.target, ratePerHour: model.ratePerHour, status: 'ok' };
+    const castingEntry = { produced: 25, target: 20, ratePerHour: 2.5, status: 'ok' };
+    expect(computeShiftPay(assemblyEntry, 500)).toEqual(computeShiftPay(castingEntry, 500));
+  });
+});

@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { fb } from '../../firebase.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState } from '../../utils.js';
 
 import UserModal from '../UserModal.jsx';
 import MachinesModal from '../MachinesModal.jsx';
 import OrdersModal from '../OrdersModal.jsx';
 import MaintenanceModal from '../MaintenanceModal.jsx';
 import InspectionLogModal from '../InspectionLogModal.jsx';
+import PurchasedComponentsModal from '../PurchasedComponentsModal.jsx';
+import AssemblyModelsModal from '../AssemblyModelsModal.jsx';
 import AnalyticsView from './AnalyticsView.jsx';
 import CastingTypesModal from '../CastingTypesModal.jsx';
 import AssignModal from '../AssignModal.jsx';
@@ -55,6 +57,11 @@ export default function Dashboard({currentUser,onLogout}) {
   const [showMaintenance,setShowMaintenance]=useState(false);
   const [inspectionLog,setInspectionLog]=useState([]);
   const [showInspections,setShowInspections]=useState(false);
+  const [assemblyModels,setAssemblyModels]=useState([]);
+  const [showAssemblyModels,setShowAssemblyModels]=useState(false);
+  const [purchasedComponents,setPurchasedComponents]=useState([]);
+  const [showPurchasedComponents,setShowPurchasedComponents]=useState(false);
+  const [shiftCompleteBlockedShortages,setShiftCompleteBlockedShortages]=useState(null);
   const [view,setView]=useState('floor'); // 'floor' | 'analytics'
   const [sessions,setSessions]=useState({});
   const [clock,setClock]=useState(new Date());
@@ -92,8 +99,10 @@ export default function Dashboard({currentUser,onLogout}) {
       fb.get('maintenance_schedules').then(v=>v||[]),
       fb.get('maintenance_log').then(v=>v||[]),
       fb.get('inspection_log').then(v=>v||[]),
-    ]).then(([m,a,ct,w,sl,at,wl,adj,ord,ms,ml,il])=>{
-      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setWageLog(wl); setAdjustments(adj); setOrders(ord); setMaintSchedules(ms); setMaintLog(ml); setInspectionLog(il); setMachinesLoaded(true);
+      fb.get('assembly_models').then(v=>v||[]),
+      fb.get('purchased_components').then(v=>v||[]),
+    ]).then(([m,a,ct,w,sl,at,wl,adj,ord,ms,ml,il,am,pc])=>{
+      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setWageLog(wl); setAdjustments(adj); setOrders(ord); setMaintSchedules(ms); setMaintLog(ml); setInspectionLog(il); setAssemblyModels(am); setPurchasedComponents(pc); setMachinesLoaded(true);
     });
     const unM=fb.sub('machines',v=>{if(v)setMachines(v);});
     const unA=fb.sub('alerts',v=>{if(v)setAlerts(v);});
@@ -107,8 +116,10 @@ export default function Dashboard({currentUser,onLogout}) {
     const unMS=fb.sub('maintenance_schedules',v=>{if(v)setMaintSchedules(v);});
     const unML=fb.sub('maintenance_log',v=>{if(v)setMaintLog(v);});
     const unIL=fb.sub('inspection_log',v=>{if(v)setInspectionLog(v);});
+    const unAM=fb.sub('assembly_models',v=>{if(v)setAssemblyModels(v);});
+    const unPC=fb.sub('purchased_components',v=>{if(v)setPurchasedComponents(v);});
     const unS=fb.sub('sessions',v=>{if(v)setSessions(v);});
-    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unS();};
+    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unAM();unPC();unS();};
   },[]);
 
   useEffect(()=>{
@@ -145,6 +156,8 @@ export default function Dashboard({currentUser,onLogout}) {
   // Durable audit trail of inspections — the alert feed is capped at 200, this isn't (well, 1000).
   // Only filled rows are stored to keep entries small.
   const writeInspectionLog=list=>{ setInspectionLog(list); fb.set('inspection_log',list); };
+  const writeAssemblyModels=list=>{ setAssemblyModels(list); fb.set('assembly_models',list); };
+  const writePurchasedComponents=list=>{ setPurchasedComponents(list); fb.set('purchased_components',list); };
   const pushAlert=(type,msg,data=null)=>{ const a={id:Date.now(),type,msg,data,time:nowStr(),date:todayStr(),ts:fullTs()}; writeAlerts([a,...alerts].slice(0,200)); };
   const removeAlert=id=>writeAlerts(alerts.filter(x=>x.id!==id));
   const clearAllAlerts=()=>writeAlerts([]);
@@ -232,29 +245,59 @@ export default function Dashboard({currentUser,onLogout}) {
 
   const handleShiftComplete=async({newPieces,reworkPieces,castingDefects,machiningDefects,total,consumed,reason})=>{
     if(!shiftCompleteData) return;
-    const {machine:m,pj,shiftKey}=shiftCompleteData;
+    const {machine:m,pj,shiftKey,mode}=shiftCompleteData;
     const isBelow=total<pj.target;
-    const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
-    setMachines(updated); fb.set('machines',updated);
+    const isAssemblyJob=mode==='assembly'||!!m.assemblyModelId;
+    setShiftCompleteBlockedShortages(null);
 
-    const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
-    const route=ct&&m.routeId?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
-    const nodeId=m.nodeId;
-    if(ct&&route&&nodeId){
-      const result=computeShiftCompletionUpdate(castingTypes,wip,{ct,route,nodeId,machineName:m.name,consumed,total,newPieces,reworkPieces,castingDefects,machiningDefects});
-      if(!result.ok){
-        // Couldn't match this node to any step in the route — data mismatch, bail out safely
-        // rather than silently writing garbage WIP values.
-        console.warn('handleShiftComplete: nodeId',nodeId,'not found in route steps',route.steps);
-        writeAlerts([{id:Date.now(),type:'warn',msg:`⚠ ${m.name}: shift marked complete but WIP could not be updated — route step mismatch. Check Casting types.`,time:nowStr(),date:todayStr(),ts:fullTs()},...alerts].slice(0,200));
+    if(isAssemblyJob){
+      const model=assemblyModels.find(a=>Number(a.id)===Number(m.assemblyModelId));
+      if(!model){
+        writeAlerts([{id:Date.now(),type:'warn',msg:`⚠ ${m.name}: shift marked complete but the assembly model could not be found. Check Assembly models.`,time:nowStr(),date:todayStr(),ts:fullTs()},...alerts].slice(0,200));
         setShiftCompleteData(null);
         return;
       }
-      const {updatedTypes,updatedWip,logEntries}=result;
-      setCastingTypes(updatedTypes); fb.set('casting_types',updatedTypes);
-      setWip(updatedWip); fb.set('wip',updatedWip);
-      const updatedLog=[...logEntries,...stockLog].slice(0,500);
+      // castingDefects doubles as the unified "defects" count for an assembly build — the
+      // foundry/machining split doesn't apply here (ShiftCompleteModal hides Machining defect
+      // and relabels Casting defect -> Defects in assembly mode; machiningDefects stays 0).
+      const result=computeAssemblyShiftUpdate(castingTypes,purchasedComponents,wip,{model,machineName:m.name,consumed,total,newPieces,reworkPieces,defects:castingDefects});
+      if(!result.ok){
+        // Hard block — keep the modal OPEN with the shortages shown, do NOT mark the shift
+        // complete, do NOT write a wage_log entry. See computeAssemblyShiftUpdate's header
+        // comment in utils.js for why this is a block rather than a warning like the rest of
+        // the app.
+        setShiftCompleteBlockedShortages(result.shortages);
+        return;
+      }
+      writePurchasedComponents(result.updatedComponents);
+      setWip(result.updatedWip); fb.set('wip',result.updatedWip);
+      const updatedLog=[...result.logEntries,...stockLog].slice(0,500);
       setStockLog(updatedLog); fb.set('stock_log',updatedLog);
+      const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects:0});
+      setMachines(updated); fb.set('machines',updated);
+    } else {
+      const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
+      setMachines(updated); fb.set('machines',updated);
+
+      const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
+      const route=ct&&m.routeId?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
+      const nodeId=m.nodeId;
+      if(ct&&route&&nodeId){
+        const result=computeShiftCompletionUpdate(castingTypes,wip,{ct,route,nodeId,machineName:m.name,consumed,total,newPieces,reworkPieces,castingDefects,machiningDefects});
+        if(!result.ok){
+          // Couldn't match this node to any step in the route — data mismatch, bail out safely
+          // rather than silently writing garbage WIP values.
+          console.warn('handleShiftComplete: nodeId',nodeId,'not found in route steps',route.steps);
+          writeAlerts([{id:Date.now(),type:'warn',msg:`⚠ ${m.name}: shift marked complete but WIP could not be updated — route step mismatch. Check Casting types.`,time:nowStr(),date:todayStr(),ts:fullTs()},...alerts].slice(0,200));
+          setShiftCompleteData(null);
+          return;
+        }
+        const {updatedTypes,updatedWip,logEntries}=result;
+        setCastingTypes(updatedTypes); fb.set('casting_types',updatedTypes);
+        setWip(updatedWip); fb.set('wip',updatedWip);
+        const updatedLog=[...logEntries,...stockLog].slice(0,500);
+        setStockLog(updatedLog); fb.set('stock_log',updatedLog);
+      }
     }
 
     // OT pay: extra units above target, converted to hours via the stage's units/hour rate,
@@ -342,18 +385,20 @@ export default function Dashboard({currentUser,onLogout}) {
       {showUser&&<UserModal currentUser={currentUser} onClose={()=>setShowUser(false)}/>}
       {showMachines&&<MachinesModal machines={machines} setMachines={setMachines} onClose={()=>setShowMachines(false)}/>}
       {showProd&&<CastingTypesModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} onClose={()=>setShowProd(false)}/>}
-      {showAssign&&<AssignModal machines={machines} setMachines={setMachines} castingTypes={castingTypes} wip={wip} onClose={()=>setShowAssign(false)}/>}
+      {showAssign&&<AssignModal machines={machines} setMachines={setMachines} castingTypes={castingTypes} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} wip={wip} onClose={()=>setShowAssign(false)}/>}
+      {showAssemblyModels&&<AssemblyModelsModal assemblyModels={assemblyModels} writeAssemblyModels={writeAssemblyModels} castingTypes={castingTypes} purchasedComponents={purchasedComponents} wip={wip} onClose={()=>setShowAssemblyModels(false)}/>}
+      {showPurchasedComponents&&<PurchasedComponentsModal purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents} onClose={()=>setShowPurchasedComponents(false)}/>}
       {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
       {showDownload&&<DownloadModal alerts={alerts} onClose={()=>setShowDownload(false)}/>}
       {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
-      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} orders={orders} writeOrders={writeOrders} onClose={()=>setShowStock(false)}/>}
+      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} orders={orders} writeOrders={writeOrders} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents} onClose={()=>setShowStock(false)}/>}
       {showOrders&&<OrdersModal orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onClose={()=>setShowOrders(false)}/>}
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
       {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
       {showWageRegister&&<WageRegisterModal attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onClose={()=>setShowWageRegister(false)}/>}
-      {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} onSubmit={handleShiftComplete} onClose={()=>setShiftCompleteData(null)}/>}
-      {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
+      {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} mode={shiftCompleteData.mode} blockedShortages={shiftCompleteBlockedShortages} onSubmit={handleShiftComplete} onClose={()=>{setShiftCompleteData(null);setShiftCompleteBlockedShortages(null);}}/>}
+      {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} mode={logProgressData.mode} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
       {breakdownData&&<BreakdownModal machine={breakdownData.machine} onSubmit={handleBreakdownSubmit} onClose={()=>setBreakdownData(null)}/>}
       {lineInspectionData&&<LineInspectionModal machine={lineInspectionData.machine} mode={lineInspectionData.mode||'setting'} onSubmit={lineInspectionData.mode==='inspection'?handleLineInspectionRecord:handleSubmitSettingInspection} onClose={()=>setLineInspectionData(null)}/>}
       {repairData&&<RepairAssessmentModal machine={repairData.machine} breakdownReason={(alerts.find(a=>a.data&&a.data.category==='breakdown'&&a.data.machine===repairData.machine.name)||{}).data?.reason} onSubmit={handleRepairSubmit} onClose={()=>setRepairData(null)}/>}
@@ -369,6 +414,7 @@ export default function Dashboard({currentUser,onLogout}) {
         setShowMachines={setShowMachines} setShowOrders={setShowOrders} ordersAttention={ordersAttention}
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
         setShowInspections={setShowInspections}
+        setShowAssemblyModels={setShowAssemblyModels} setShowPurchasedComponents={setShowPurchasedComponents}
         view={view} setView={setView}
       />
 
@@ -379,7 +425,7 @@ export default function Dashboard({currentUser,onLogout}) {
       ):(
       <div className="main-layout">
         <div className="content-area">
-          <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} viewShift={viewShift}/>
+          <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} assemblyModels={assemblyModels} viewShift={viewShift}/>
 
           {isAdmin&&castingTypes.some(s=>s.rawBalance<=s.lowThreshold)&&(
             <div className="info-box danger" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
@@ -392,7 +438,7 @@ export default function Dashboard({currentUser,onLogout}) {
 
           <MachineGrid
             viewShift={viewShift} filterMode={filterMode} setFilterMode={setFilterMode}
-            filtered={filtered} castingTypes={castingTypes}
+            filtered={filtered} castingTypes={castingTypes} assemblyModels={assemblyModels}
             selectedMachine={selectedMachine} setSelectedMachine={setSelectedMachine}
           />
 
@@ -403,7 +449,7 @@ export default function Dashboard({currentUser,onLogout}) {
 
         <div className="sidebar">
           <MachineDetailPanel
-            selectedM={selectedM} viewShift={viewShift} isAdmin={isAdmin} castingTypes={castingTypes}
+            selectedM={selectedM} viewShift={viewShift} isAdmin={isAdmin} castingTypes={castingTypes} assemblyModels={assemblyModels}
             setRepairData={setRepairData} setIdle={setIdle} setBreakdownData={setBreakdownData}
             setShowAssign={setShowAssign} setLogProgressData={setLogProgressData}
             setLineInspectionData={setLineInspectionData} setShiftCompleteData={setShiftCompleteData}

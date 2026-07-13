@@ -7,6 +7,7 @@ export default function Topbar({
   setShowOnline, setShowDownload, setShowBreakdownHistory, setShowProd,
   setShowAssign, setShowStock, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
   setShowOrders, ordersAttention, setShowMaintenance, maintAttention, setShowInspections, view, setView,
+  setShowAssemblyModels, setShowPurchasedComponents,
 }) {
   const [menuOpen,setMenuOpen]=useState(false);
   useEffect(()=>{
@@ -42,6 +43,8 @@ export default function Topbar({
           {isAdmin&&<button className="icon-btn" onClick={act(setShowInspections)}>Inspections</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowProd)}>Production jobs</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowAssign)}>Assign jobs</button>}
+          {isAdmin&&<button className="icon-btn" onClick={act(setShowAssemblyModels)}>Assembly models</button>}
+          {isAdmin&&<button className="icon-btn" onClick={act(setShowPurchasedComponents)}>Purchased components</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowOrders)}>Orders{ordersAttention>0&&<span style={{color:'var(--warn)'}}> ⚠{ordersAttention}</span>}</button>}
           {isAdmin&&<button className="icon-btn" onClick={act(setShowStock)}>Stock</button>}
           {currentUser.role==='admin'&&<button className="icon-btn" onClick={act(setShowAttendance)}>Attendance</button>}

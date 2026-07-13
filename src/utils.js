@@ -14,6 +14,37 @@ export const initials = name => name.split(' ').map(w=>w[0]).join('').toUpperCas
 // (handled separately), so WIP keys only exist for stage indices 2..N.
 export const wipKey = (castingTypeId,nodeId) => `${castingTypeId}:${nodeId}`;
 export const getWip = (wip,castingTypeId,nodeId) => wip[wipKey(castingTypeId,nodeId)] || 0;
+// Namespaced WIP key for an assembly model's own counters (finished/scrapped built units). The
+// 'asm:' prefix keeps an assembly model's counters structurally independent of a casting type's,
+// even if they happen to share the same numeric id — no id-uniqueness assumption needed.
+export const assemblyWipKey = (modelId,key) => wipKey(`asm:${modelId}`,key);
+// How much finished stock of a casting type is available to dispatch OR consume (via an assembly
+// BOM). 'assembled' is a THIRD monotonic counter alongside 'finished'/'dispatched' — never
+// decremented directly, only ever added to (see computeAssemblyShiftUpdate below) — so this stays
+// a safe derived read no matter how many times it's called.
+export const finishedOnHand = (wip,castingTypeId) =>
+  Math.max(0,Math.round((getWip(wip,castingTypeId,'finished')-getWip(wip,castingTypeId,'dispatched')-getWip(wip,castingTypeId,'assembled'))*100)/100);
+
+// Available stock for one BOM line, in the line's own unit: a casting-kind line reads the
+// casting type's finished-goods stock; a purchased-kind line reads the component's live balance
+// directly (a plain mutable number like rawBalance, not part of the monotonic-counter system).
+export function bomLineAvailable(castingTypes,purchasedComponents,wip,line){
+  if(line.kind==='casting'){
+    const ct=(castingTypes||[]).find(c=>Number(c.id)===Number(line.itemId));
+    return ct?finishedOnHand(wip,ct.id):0;
+  }
+  const pc=(purchasedComponents||[]).find(p=>Number(p.id)===Number(line.itemId));
+  return pc?(pc.balance||0):0;
+}
+// Max whole assembly units buildable right now — the limiting BOM line wins. An empty BOM can't
+// build anything, so it returns 0, not Infinity.
+export function maxBuildable(castingTypes,purchasedComponents,wip,bom){
+  if(!bom||!bom.length) return 0;
+  return Math.min(...bom.map(line=>{
+    if(!line.qty||line.qty<=0) return 0;
+    return Math.floor(bomLineAvailable(castingTypes,purchasedComponents,wip,line)/line.qty);
+  }));
+}
 // Flattens a route's steps into every nodeId it touches, regardless of fixed/floating —
 // including nodes that only appear in a side-track (see computeShiftCompletionUpdate's
 // header comment for what a side-track is). Without this, CastingTypesModal's "used in N
@@ -57,6 +88,20 @@ export const resolveStage = (castingTypes,m) => {
   const node=m.nodeId!=null?ct.nodes.find(n=>Number(n.nodeId)===Number(m.nodeId)):null;
   const route=m.routeId!=null?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
   return {ct,stage:node,route};
+};
+// Unifies "what is this machine working on" across the two job kinds a machine can carry: a
+// casting-route step (resolveStage above) or an assembly build. Checked in this order because a
+// machine only ever has ONE of assemblyModelId or castingTypeId/routeId/nodeId set at a time.
+export const resolveJob = (castingTypes,assemblyModels,m) => {
+  if(m.assemblyModelId!=null){
+    const model=(assemblyModels||[]).find(a=>Number(a.id)===Number(m.assemblyModelId));
+    return model?{kind:'assembly',model}:{kind:null};
+  }
+  if(m.castingTypeId!=null){
+    const {ct,stage,route}=resolveStage(castingTypes,m);
+    return ct&&stage?{kind:'casting',ct,stage,route}:{kind:null};
+  }
+  return {kind:null};
 };
 // OT pay for a shift: only when produced exceeds target, converted via the stage's units/hour rate,
 // paid at the operator's plain hourly rate (dailyWage/8) with no multiplier.
@@ -161,11 +206,20 @@ export function maintenanceDueState(schedule, today, leadDays=7){
 // line's dispatched count (allowed to exceed qty — record what physically shipped) and
 // auto-completes the order once EVERY line has dispatched >= qty. Pure — returns a new array;
 // no matching order/line returns the input unchanged.
-export function applyDispatchToOrder(orders, orderId, castingTypeId, qty){
+// itemType defaults to 'casting' for backward compatibility with existing order lines, which
+// predate assemblies and never carry an itemType field. A casting-kind match is keyed off
+// castingTypeId (as before); an assembly-kind match is keyed off assemblyModelId — the two never
+// collide because a line's own itemType (defaulted the same way) gates which field is compared.
+export function applyDispatchToOrder(orders, orderId, itemId, qty, itemType='casting'){
+  const matches=it=>{
+    const lineType=it.itemType||'casting';
+    if(lineType!==itemType) return false;
+    return itemType==='assembly'?Number(it.assemblyModelId)===Number(itemId):Number(it.castingTypeId)===Number(itemId);
+  };
   return orders.map(o=>{
     if(o.id!==orderId) return o;
-    if(!(o.items||[]).some(it=>Number(it.castingTypeId)===Number(castingTypeId))) return o;
-    const items=o.items.map(it=>Number(it.castingTypeId)===Number(castingTypeId)
+    if(!(o.items||[]).some(matches)) return o;
+    const items=o.items.map(it=>matches(it)
       ?{...it,dispatched:Math.round(((it.dispatched||0)+qty)*100)/100}
       :it);
     const complete=items.every(it=>(it.dispatched||0)>=it.qty);
@@ -182,6 +236,10 @@ export function orderProgress(order){
 // ── Analytics aggregations ─────────────────────────────────
 // All pure: (entries, from, to) with 'YYYY-MM-DD' string-comparable dates, sorted results.
 const inDateRange=(date,from,to)=>!!date&&date>=from&&date<=to;
+// Movements that represent stock LEAVING the manufacturing pipeline (to a customer, or into an
+// assembly BOM) rather than moving between production stages — excluded from mid-route
+// consumption/defect-rate denominators below, same reasoning for both: neither is "production".
+export const isPipelineExit=stageLabel=>stageLabel==='Finished goods dispatch'||(stageLabel||'').startsWith('Consumed by assembly');
 
 // Daily produced-vs-target across the range, zero-filled so the trend chart has a bar per day.
 // Capped at 92 days — beyond a quarter the per-day chart is unreadable anyway.
@@ -239,7 +297,7 @@ export function aggregateDefects(stockLog,from,to){
   (stockLog||[]).forEach(e=>{
     if(!inDateRange(e.date,from,to)||e.itemId==null) return;
     const r=by[e.itemId]||(by[e.itemId]={itemId:e.itemId,itemName:e.itemName,consumed:0,castingDefects:0,machiningDefects:0});
-    if(e.type==='out'&&e.stageLabel!=='Finished goods dispatch') r.consumed+=e.qty||0;
+    if(e.type==='out'&&!isPipelineExit(e.stageLabel)) r.consumed+=e.qty||0;
     else if(e.type==='defect'&&(e.stageLabel||'').includes('Casting defect')) r.castingDefects+=e.qty||0;
     else if(e.type==='defect'&&(e.stageLabel||'').includes('Machining defect')) r.machiningDefects+=e.qty||0;
   });
@@ -306,7 +364,7 @@ export function aggregateFoundryScore(stockLog,from,to){
     const r=rowFor(k);
     if(e.itemName&&!r.castingTypes.includes(e.itemName)) r.castingTypes.push(e.itemName);
     if(e.type==='defect'&&(e.stageLabel||'').includes('Casting defect')) r.castingDefects+=e.qty||0;
-    else if(e.type==='out'&&e.stageLabel!=='Finished goods dispatch') r.processed+=e.qty||0;
+    else if(e.type==='out'&&!isPipelineExit(e.stageLabel)) r.processed+=e.qty||0;
   });
   return Object.values(by)
     .filter(r=>r.supplied>0||r.castingDefects>0||r.processed>0)
@@ -553,9 +611,83 @@ export function computeShiftCompletionUpdate(castingTypes,wip,{ct,route,nodeId,m
   return {ok:true,updatedTypes,updatedWip,logEntries};
 }
 
+// Consumption engine for an assembly build — a SEPARATE pure function from
+// computeShiftCompletionUpdate above, deliberately. That function is a single-material flow
+// engine (one casting type's pieces moving through one route graph, with floating groups and
+// side-tracks). An assembly is a different shape of problem entirely: consume N differently-named
+// inputs in fixed ratios (the BOM), produce one output. Forcing it through the route/gate/
+// side-track machinery would tangle two unrelated concerns; this mirrors the codebase's existing
+// pattern of small dedicated pure helpers (see computeShiftPay vs computeOperatorDayPay).
+//
+// Hard-block, all-or-nothing: every BOM line is checked BEFORE any consumption is committed, and
+// if even one line is short, NOTHING is consumed — returns {ok:false, shortages:[...]} listing
+// every short line, not just the first. This is a deliberate departure from the rest of the app
+// (which floors/warns rather than blocks — e.g. rawBalance can go negative, WIP pools floor
+// consumption at 0). The reason: finishedOnHand is a DERIVED READ from monotonic counters
+// (finished-dispatched-assembled), not a mutable balance like rawBalance. If 'assembled' were
+// allowed to overshoot 'finished', the floor-at-0 in finishedOnHand wouldn't just clip a display
+// number — it would permanently and silently erase how far over the line was consumed, with no
+// negative signal to detect it later (unlike rawBalance, which visibly goes negative and
+// self-heals on the next stock-in). Blocking the whole build keeps that guarantee intact.
+//
+// consumed = total + defects (mirrors the casting contract: a defective assembly still consumed
+// its BOM parts). On success: casting-kind BOM lines increment wipKey(ct.id,'assembled') — never
+// decrement 'finished' itself, staying monotonic like 'entered'/'finished'/'scrapped' above.
+// Purchased-kind lines decrement purchasedComponents[].balance directly (safe — it's a plain
+// mutable number, not a monotonic counter, so it can dip and self-heal like rawBalance does).
+// The model's own output increments assemblyWipKey(model.id,'finished'); defects increment
+// assemblyWipKey(model.id,'scrapped'). Every consumption row logs to stock_log with stageLabel
+// 'Consumed by assembly · <model name>' — distinct from 'Finished goods dispatch' so movement
+// history stays legible, and excluded from mid-route consumption sums via isPipelineExit above.
+export function computeAssemblyShiftUpdate(castingTypes,purchasedComponents,wip,{model,machineName,consumed,total,newPieces,reworkPieces,defects}){
+  const bom=model.bom||[];
+  const shortages=[];
+  bom.forEach(line=>{
+    const needed=Math.round((consumed*line.qty)*100)/100;
+    const available=bomLineAvailable(castingTypes,purchasedComponents,wip,line);
+    if(needed>available){
+      const name=line.kind==='casting'
+        ?(castingTypes.find(c=>Number(c.id)===Number(line.itemId))||{}).name||`casting #${line.itemId}`
+        :(purchasedComponents.find(p=>Number(p.id)===Number(line.itemId))||{}).name||`component #${line.itemId}`;
+      shortages.push({kind:line.kind,itemId:line.itemId,itemName:name,needed,available});
+    }
+  });
+  if(shortages.length) return {ok:false,shortages};
+
+  const updatedWip={...wip};
+  let updatedComponents=purchasedComponents;
+  const logEntries=[];
+
+  bom.forEach(line=>{
+    const qty=Math.round((consumed*line.qty)*100)/100;
+    if(line.kind==='casting'){
+      const ct=castingTypes.find(c=>Number(c.id)===Number(line.itemId));
+      const key=wipKey(ct.id,'assembled');
+      updatedWip[key]=Math.round(((updatedWip[key]||0)+qty)*100)/100;
+      logEntries.push({id:Date.now()+logEntries.length,type:'out',itemId:ct.id,itemName:ct.name,unit:ct.unit,qty,stageLabel:`Consumed by assembly · ${model.name}`,note:`${machineName} — ${total} built`,date:todayStr(),time:nowStr(),ts:fullTs()});
+    } else {
+      const pc=updatedComponents.find(p=>Number(p.id)===Number(line.itemId));
+      updatedComponents=updatedComponents.map(p=>Number(p.id)===Number(line.itemId)?{...p,balance:Math.round(((p.balance||0)-qty)*100)/100}:p);
+      logEntries.push({id:Date.now()+logEntries.length,type:'out',itemId:pc.id,itemName:pc.name,unit:pc.unit,qty,stageLabel:`Consumed by assembly · ${model.name}`,note:`${machineName} — ${total} built`,date:todayStr(),time:nowStr(),ts:fullTs()});
+    }
+  });
+
+  const finishedKey=assemblyWipKey(model.id,'finished');
+  updatedWip[finishedKey]=Math.round(((updatedWip[finishedKey]||0)+total)*100)/100;
+  logEntries.push({id:Date.now()+logEntries.length,type:'out',itemId:'asm:'+model.id,itemName:model.name,unit:model.unit,qty:consumed,stageLabel:`Assembly build · ${model.name}`,note:`${machineName} — ${newPieces} new, ${reworkPieces} rework`,date:todayStr(),time:nowStr(),ts:fullTs()});
+
+  if(defects>0){
+    const scrappedKey=assemblyWipKey(model.id,'scrapped');
+    updatedWip[scrappedKey]=Math.round(((updatedWip[scrappedKey]||0)+defects)*100)/100;
+    logEntries.push({id:Date.now()+logEntries.length,type:'defect',itemId:'asm:'+model.id,itemName:model.name,unit:model.unit,qty:defects,machine:machineName,stageLabel:`Assembly build · ${model.name} · Defects`,note:'Scrapped',date:todayStr(),time:nowStr(),ts:fullTs()});
+  }
+
+  return {ok:true,updatedComponents,updatedWip,logEntries};
+}
+
 export function defaultSlot(){
   return {status:'idle',job:null,progress:0,output:0,operator:null,assignedOperator:null,
-    castingTypeId:null,routeId:null,nodeId:null,prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
+    castingTypeId:null,routeId:null,nodeId:null,assemblyModelId:null,prodCount:0,newPieces:0,reworkPieces:0,castingDefects:0,machiningDefects:0,shiftComplete:false,
     setupApplied:false,setupHoursUsed:0,adjustedTarget:null,settingApproved:false,lineInspection:null,
     settingApprovalStatus:null,settingRejectionNote:null};
 }
@@ -569,7 +701,7 @@ export function getSlot(m,shiftKey){
     return {
       status:m.status??'idle',job:m.job??null,progress:m.progress??0,output:m.output??0,
       operator:m.operator??null,assignedOperator:m.assignedOperator??null,
-      castingTypeId:m.castingTypeId??null,routeId:m.routeId??null,nodeId:m.nodeId??null,prodCount:m.prodCount??0,newPieces:m.newPieces??0,reworkPieces:m.reworkPieces??0,
+      castingTypeId:m.castingTypeId??null,routeId:m.routeId??null,nodeId:m.nodeId??null,assemblyModelId:m.assemblyModelId??null,prodCount:m.prodCount??0,newPieces:m.newPieces??0,reworkPieces:m.reworkPieces??0,
       castingDefects:m.castingDefects??0,machiningDefects:m.machiningDefects??0,
       shiftComplete:m.shiftComplete??false,setupApplied:m.setupApplied??false,setupHoursUsed:m.setupHoursUsed??0,
       adjustedTarget:m.adjustedTarget??null,settingApproved:m.settingApproved??false,lineInspection:m.lineInspection??null,
@@ -601,7 +733,7 @@ export function initMachines() {
     return {
       ...def, status:'idle',
       job:null, progress:0, target: rnd(60,150), output:0, operator:null,
-      castingTypeId:null, routeId:null, nodeId:null,
+      castingTypeId:null, routeId:null, nodeId:null, assemblyModelId:null,
       prodCount:0, newPieces:0, reworkPieces:0, castingDefects:0, machiningDefects:0,
       shiftComplete:false, assignedOperator:null,
       setupApplied:false, setupHoursUsed:0, adjustedTarget:null,

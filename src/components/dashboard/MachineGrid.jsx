@@ -1,8 +1,8 @@
 import { BADGE } from '../../constants.js';
-import { resolveStage } from '../../utils.js';
+import { resolveJob } from '../../utils.js';
 
 export default function MachineGrid({
-  viewShift, filterMode, setFilterMode, filtered, castingTypes, selectedMachine, setSelectedMachine,
+  viewShift, filterMode, setFilterMode, filtered, castingTypes, assemblyModels, selectedMachine, setSelectedMachine,
 }) {
   return (
     <div>
@@ -15,9 +15,10 @@ export default function MachineGrid({
       {!filtered.length?<div className="empty" style={{padding:'2rem'}}>No machines match this filter</div>:(
         <div className="machine-grid">
           {filtered.map(m=>{
-            const {ct,stage,route}=resolveStage(castingTypes,m);
-            const displayJob=ct&&stage?`${ct.name} — ${stage.name}`:m.job||'—';
-            const effectiveTarget=stage?(m.setupApplied&&m.adjustedTarget?m.adjustedTarget:stage.target):null;
+            const job=resolveJob(castingTypes,assemblyModels,m);
+            const displayJob=job.kind==='casting'?`${job.ct.name} — ${job.stage.name}`:job.kind==='assembly'?job.model.name:m.job||'—';
+            const effectiveTarget=job.kind==='casting'?(m.setupApplied&&m.adjustedTarget?m.adjustedTarget:job.stage.target):job.kind==='assembly'?job.model.target:null;
+            const hasJob=job.kind!==null;
             return (
               <div key={m.id} className={`m-card ${m.status}${selectedMachine===m.id?' selected':''}`} onClick={()=>{
                 const opening=selectedMachine!==m.id;
@@ -31,12 +32,12 @@ export default function MachineGrid({
                 <div className="m-job">{displayJob}</div>
                 {m.assignedOperator&&<div className="m-op">👤 {m.operator}</div>}
                 <div className="m-prog-bg"><div className="m-prog-fill" style={{width:`${m.progress}%`}}></div></div>
-                {stage?(
+                {hasJob?(
                   <div className="m-units">{m.prodCount}/{effectiveTarget} units</div>
                 ):(
                   <div className="m-units">No job assigned</div>
                 )}
-                {stage&&m.shiftComplete&&<span className={`shift-done-tag${m.prodCount>=effectiveTarget?' ok':' low'}`}>{m.prodCount}/{effectiveTarget}</span>}
+                {hasJob&&m.shiftComplete&&<span className={`shift-done-tag${m.prodCount>=effectiveTarget?' ok':' low'}`}>{m.prodCount}/{effectiveTarget}</span>}
               </div>
             );
           })}

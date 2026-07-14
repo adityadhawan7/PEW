@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Modal from './Modal.jsx';
+import PageView from './PageView.jsx';
 import { fb } from '../firebase.js';
 import { todayStr, nowStr, fullTs, computeOperatorDayPay } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
@@ -10,13 +10,13 @@ const ADJ_TYPES={
   advance:   {lbl:'Salary advance',  sign:-1},
 };
 
-// ── Wage Register Modal ────────────────────────────────────
+// ── Wage register (full-page view, admin only) ─────────────
 // Money is computed here at read time from wage_log FACTS (produced/target/rate/status) ×
 // each operator's CURRENT dailyWage — entries never store amounts. See computeShiftPay /
 // computeOperatorDayPay in utils.js for the pay rules (piece-rate vs daily, shortfall gating).
 // The adjustments ledger (manual food/conveyance allowances and salary advances) is entered
 // on the second tab; the register nets it against the period's pay.
-export default function WageRegisterModal({attendance,wageLog,adjustments,writeAdjustments,currentUser,onClose}) {
+export default function WageRegisterView({attendance,wageLog,adjustments,writeAdjustments,currentUser,onBack}) {
   const [users,setUsers]=useState([]);
   useEffect(()=>{ fb.listUserProfiles().then(setUsers); },[]);
   const [from,setFrom]=useState(todayStr());
@@ -114,7 +114,7 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
   };
 
   return (
-    <Modal onClose={onClose} title="Wage register" wide>
+    <PageView title="Wage register" onBack={onBack}>
       <div className="role-chips" style={{marginBottom:'1rem'}}>
         <div className={`role-chip${tab==='register'?' active':''}`} onClick={()=>setTab('register')}>Register</div>
         <div className={`role-chip${tab==='adjust'?' active':''}`} onClick={()=>setTab('adjust')}>Allowances &amp; advances</div>
@@ -218,6 +218,6 @@ export default function WageRegisterModal({attendance,wageLog,adjustments,writeA
           )}
         </>
       )}
-    </Modal>
+    </PageView>
   );
 }

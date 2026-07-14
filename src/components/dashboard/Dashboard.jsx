@@ -19,7 +19,7 @@ import DownloadModal from '../DownloadModal.jsx';
 import BreakdownHistoryModal from '../BreakdownHistoryModal.jsx';
 import StockView from '../StockView.jsx';
 import AttendanceModal from '../AttendanceModal.jsx';
-import WageRegisterModal from '../WageRegisterModal.jsx';
+import WageRegisterView from '../WageRegisterView.jsx';
 import ShiftCompleteModal from '../ShiftCompleteModal.jsx';
 import LogProgressModal from '../LogProgressModal.jsx';
 import BreakdownModal from '../BreakdownModal.jsx';
@@ -76,7 +76,6 @@ export default function Dashboard({currentUser,onLogout}) {
   const [showDownload,setShowDownload]=useState(false);
   const [showBreakdownHistory,setShowBreakdownHistory]=useState(false);
   const [showAttendance,setShowAttendance]=useState(false);
-  const [showWageRegister,setShowWageRegister]=useState(false);
   const [shiftCompleteData,setShiftCompleteData]=useState(null);
   const [logProgressData,setLogProgressData]=useState(null);
   const [breakdownData,setBreakdownData]=useState(null);
@@ -402,7 +401,6 @@ export default function Dashboard({currentUser,onLogout}) {
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
       {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
-      {showWageRegister&&<WageRegisterModal attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onClose={()=>setShowWageRegister(false)}/>}
       {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} mode={shiftCompleteData.mode} blockedShortages={shiftCompleteBlockedShortages} onSubmit={handleShiftComplete} onClose={()=>{setShiftCompleteData(null);setShiftCompleteBlockedShortages(null);}}/>}
       {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} mode={logProgressData.mode} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
       {breakdownData&&<BreakdownModal machine={breakdownData.machine} onSubmit={handleBreakdownSubmit} onClose={()=>setBreakdownData(null)}/>}
@@ -416,7 +414,7 @@ export default function Dashboard({currentUser,onLogout}) {
         currentUser={currentUser} onLogout={onLogout}
         setShowOnline={setShowOnline} setShowDownload={setShowDownload} setShowBreakdownHistory={setShowBreakdownHistory}
         setShowProd={setShowProd} setShowAssign={setShowAssign}
-        setShowAttendance={setShowAttendance} setShowWageRegister={setShowWageRegister} setShowUser={setShowUser}
+        setShowAttendance={setShowAttendance} setShowUser={setShowUser}
         setShowMachines={setShowMachines} ordersAttention={ordersAttention}
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
         setShowInspections={setShowInspections}
@@ -437,6 +435,8 @@ export default function Dashboard({currentUser,onLogout}) {
         />
       ):safeView==='orders'?(
         <OrdersView orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onBack={()=>setView('floor')}/>
+      ):safeView==='wages'?(
+        <WageRegisterView attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='myshift'?(
       <div className="main-layout">
         <div className="content-area">

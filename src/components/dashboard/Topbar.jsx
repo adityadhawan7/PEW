@@ -12,7 +12,7 @@ import { initials } from '../../utils.js';
 export default function Topbar({
   viewShift, setViewShift, clock, isAdmin, currentUser, onLogout,
   setShowOnline, setShowDownload, setShowBreakdownHistory, setShowProd,
-  setShowAssign, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
+  setShowAssign, setShowAttendance, setShowUser, setShowMachines,
   ordersAttention, setShowMaintenance, maintAttention, setShowInspections,
   setShowAssemblyModels, setShowPurchasedComponents,
   view, setView,
@@ -61,7 +61,7 @@ export default function Topbar({
       {label:'Manage machines',adminOnly:true,onClick:act(setShowMachines)},
       {label:'Manage users',adminOnly:true,onClick:act(setShowUser)},
       {label:'Attendance',adminOnly:true,onClick:act(setShowAttendance)},
-      {label:'Wages',adminOnly:true,onClick:act(setShowWageRegister)},
+      {label:'Wages',adminOnly:true,active:view==='wages',onClick:goView('wages')},
     ]},
   ];
 

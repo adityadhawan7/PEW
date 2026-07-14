@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fb } from '../../firebase.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, orderDueState, maintenanceDueState } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary } from '../../utils.js';
 
 import UserModal from '../UserModal.jsx';
 import MachinesModal from '../MachinesModal.jsx';
@@ -37,6 +37,7 @@ import OutputChart from './OutputChart.jsx';
 import ShiftOverview from './ShiftOverview.jsx';
 import MachineDetailPanel from './MachineDetailPanel.jsx';
 import AlertsPanel from './AlertsPanel.jsx';
+import AttentionStrip from './AttentionStrip.jsx';
 
 export default function Dashboard({currentUser,onLogout}) {
   const [machines,setMachines]=useState(initMachines);
@@ -373,8 +374,10 @@ export default function Dashboard({currentUser,onLogout}) {
     eff:visible.length?Math.round(visible.reduce((s,m)=>s+(m.output/m.target*100),0)/visible.length):0
   };
   const cfg=SHIFT_CFG[viewShift];
-  const ordersAttention=orders.filter(o=>['overdue','dueSoon'].includes(orderDueState(o,todayStr()))).length;
-  const maintAttention=maintSchedules.filter(s=>['overdue','dueSoon'].includes(maintenanceDueState(s,todayStr()))).length;
+  // One source for the attention strip AND the Topbar section badges — they can never disagree.
+  const attention=attentionSummary({orders,maintSchedules,castingTypes,purchasedComponents,alerts,today:todayStr()});
+  const ordersAttention=attention.orders.total;
+  const maintAttention=attention.maint.total;
   // Defensive: a view a role isn't entitled to falls back to that role's home. In practice
   // unreachable (every setter is role-gated and role is fixed per session) — belt and braces.
   const safeView=
@@ -456,14 +459,9 @@ export default function Dashboard({currentUser,onLogout}) {
       ):(
       <div className="main-layout">
         <div className="content-area">
-          <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} assemblyModels={assemblyModels} viewShift={viewShift}/>
+          {isAdmin&&<AttentionStrip attention={attention} setView={setView} setShowMaintenance={setShowMaintenance}/>}
 
-          {isAdmin&&castingTypes.some(s=>s.rawBalance<=s.lowThreshold)&&(
-            <div className="info-box danger" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
-              <span>⚠ Low stock: {castingTypes.filter(s=>s.rawBalance<=s.lowThreshold).map(s=>`${s.name} (${s.rawBalance}${s.unit})`).join(', ')}</span>
-              <button className="small-btn" onClick={()=>setView('stock')}>View stock</button>
-            </div>
-          )}
+          <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} assemblyModels={assemblyModels} viewShift={viewShift}/>
 
           <StatsRow stats={stats}/>
 
@@ -487,6 +485,7 @@ export default function Dashboard({currentUser,onLogout}) {
           />
 
           <AlertsPanel
+            id="floor-alerts"
             alerts={alerts} isAdmin={isAdmin} removeAlert={removeAlert} clearAllAlerts={clearAllAlerts}
             setDecisionData={setDecisionData} setSettingDecisionData={setSettingDecisionData}
           />

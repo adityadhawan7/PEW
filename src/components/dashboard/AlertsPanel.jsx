@@ -1,9 +1,9 @@
 import AlertItem from './AlertItem.jsx';
 import { confirmDialog } from '../../confirmDialog.js';
 
-export default function AlertsPanel({ alerts, isAdmin, removeAlert, clearAllAlerts, setDecisionData, setSettingDecisionData }) {
+export default function AlertsPanel({ alerts, isAdmin, removeAlert, clearAllAlerts, setDecisionData, setSettingDecisionData, id }) {
   return (
-    <div className="sb-sec">
+    <div className="sb-sec" id={id}>
       <div className="row-between" style={{marginBottom:'.625rem'}}>
         <div className="sb-title" style={{marginBottom:0}}>Live alerts</div>
         {isAdmin&&alerts.length>0&&<button className="small-btn danger" onClick={async()=>{if(await confirmDialog('Clear all alerts?'))clearAllAlerts();}}>Clear all</button>}

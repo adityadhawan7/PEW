@@ -258,3 +258,14 @@ body{background:#12151b}
   .login-left,.login-right{padding:1.5rem}
   .login-left h2{font-size:22px}
 }
+
+/* ── Operator home ("My shift") ─────────────────────────── */
+.op-home{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.op-card{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:.875rem;box-shadow:var(--shadow-1)}
+.op-card-chip{font-size:9px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1px solid;border-radius:999px;padding:1px 8px}
+.op-bar{background:var(--bg5);border-radius:2px;height:5px;overflow:hidden;margin-top:6px}
+.op-bar-fill{height:100%;border-radius:2px;background:var(--accent3);transition:width .6s}
+/* The card itself is the chrome — flatten the nested ProductionActions panel */
+.op-card .prod-entry{background:none;border:none;box-shadow:none;padding:0;margin-top:.75rem;border-top:1px solid var(--border);padding-top:.75rem;border-radius:0}
+/* Big touch targets on desktop too — operators tap these all day */
+.op-card .complete-btn,.op-card .md-btn{min-height:48px;font-size:13px}

@@ -11,6 +11,7 @@ import InspectionLogModal from '../InspectionLogModal.jsx';
 import PurchasedComponentsModal from '../PurchasedComponentsModal.jsx';
 import AssemblyModelsModal from '../AssemblyModelsModal.jsx';
 import AnalyticsView from './AnalyticsView.jsx';
+import OperatorHome from './OperatorHome.jsx';
 import CastingTypesModal from '../CastingTypesModal.jsx';
 import AssignModal from '../AssignModal.jsx';
 import OnlineModal from '../OnlineModal.jsx';
@@ -62,7 +63,9 @@ export default function Dashboard({currentUser,onLogout}) {
   const [purchasedComponents,setPurchasedComponents]=useState([]);
   const [showPurchasedComponents,setShowPurchasedComponents]=useState(false);
   const [shiftCompleteBlockedShortages,setShiftCompleteBlockedShortages]=useState(null);
-  const [view,setView]=useState('floor'); // 'floor' | 'analytics'
+  // 'floor' | 'analytics' | 'myshift' — operators land on their own focused home screen;
+  // 'myshift' is only ever reachable for operators (the tabs that set it are operator-only).
+  const [view,setView]=useState(currentUser.role==='operator'?'myshift':'floor');
   const [sessions,setSessions]=useState({});
   const [clock,setClock]=useState(new Date());
   const [showUser,setShowUser]=useState(false);
@@ -418,10 +421,26 @@ export default function Dashboard({currentUser,onLogout}) {
         view={view} setView={setView}
       />
 
-      <ShiftBanner viewShift={viewShift} cfg={cfg}/>
+      {view!=='myshift'&&<ShiftBanner viewShift={viewShift} cfg={cfg}/>}
 
       {view==='analytics'?(
         <AnalyticsView wageLog={wageLog} stockLog={stockLog} alerts={alerts} maintLog={maintLog} machines={machines} castingTypes={castingTypes}/>
+      ):view==='myshift'?(
+      <div className="main-layout">
+        <div className="content-area">
+          <OperatorHome
+            currentUser={currentUser} machines={machines} castingTypes={castingTypes} assemblyModels={assemblyModels}
+            setLogProgressData={setLogProgressData} setShiftCompleteData={setShiftCompleteData}
+            setLineInspectionData={setLineInspectionData} setBreakdownData={setBreakdownData}
+          />
+        </div>
+        <div className="sidebar">
+          <AlertsPanel
+            alerts={alerts} isAdmin={isAdmin} removeAlert={removeAlert} clearAllAlerts={clearAllAlerts}
+            setDecisionData={setDecisionData} setSettingDecisionData={setSettingDecisionData}
+          />
+        </div>
+      </div>
       ):(
       <div className="main-layout">
         <div className="content-area">

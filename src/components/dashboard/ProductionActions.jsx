@@ -10,13 +10,14 @@ import { resolveJob } from '../../utils.js';
 export default function ProductionActions({
   machine, shiftKey, castingTypes, assemblyModels, isAdmin,
   setShowAssign, setLogProgressData, setShiftCompleteData, setLineInspectionData,
+  compact=false, // OperatorHome cards already show the job label + produced/target — skip them here
 }) {
   const job=resolveJob(castingTypes,assemblyModels,machine);
   const isManual=machine.shift==='manual';
   if(job.kind===null){
     return (
       <div className="prod-entry">
-        <div className="prod-entry-title">Production tracking</div>
+        {!compact&&<div className="prod-entry-title">Production tracking</div>}
         <div className="empty">No job assigned — use Assign jobs to set machine, operator, and either a casting-route step or an assembly build.</div>
         {isAdmin&&<button className="md-btn" style={{marginTop:8,width:'100%'}} onClick={()=>setShowAssign(true)}>Open Assign jobs</button>}
       </div>
@@ -30,12 +31,14 @@ export default function ProductionActions({
   const displaySub=isAssembly?'':` — ${job.route?job.route.name:''} (${job.stage.name})`;
   return (
     <div className="prod-entry">
-      <div className="prod-entry-title">Production tracking</div>
-      <div style={{fontSize:11,color:'var(--text2)',marginBottom:8}}>{displayName}{displaySub}{isManual?<span style={{marginLeft:6,color:'var(--manual)',fontFamily:'var(--mono)',fontSize:9}}>MANUAL</span>:null}</div>
-      <div className="prod-vs">
-        <span>Logged: <b>{machine.prodCount}</b></span>
-        <span>Target: <b>{effectiveTarget}</b>/shift{machine.setupApplied?' (adj.)':''}</span>
-      </div>
+      {!compact&&<div className="prod-entry-title">Production tracking</div>}
+      {!compact&&<div style={{fontSize:11,color:'var(--text2)',marginBottom:8}}>{displayName}{displaySub}{isManual?<span style={{marginLeft:6,color:'var(--manual)',fontFamily:'var(--mono)',fontSize:9}}>MANUAL</span>:null}</div>}
+      {!compact&&(
+        <div className="prod-vs">
+          <span>Logged: <b>{machine.prodCount}</b></span>
+          <span>Target: <b>{effectiveTarget}</b>/shift{machine.setupApplied?' (adj.)':''}</span>
+        </div>
+      )}
       {machine.setupApplied&&(
         <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--warn)',marginBottom:8}}>⚙ Setup applied: {machine.setupHoursUsed}hr — target reduced from {job.stage.target} to {machine.adjustedTarget}</div>
       )}

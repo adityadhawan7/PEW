@@ -22,14 +22,27 @@ export default function Topbar({
     <div className="topbar">
       <div className="logo-mark"><div className="logo-dot"></div>FACTORY OS</div>
       <div className="shift-tabs">
-        <div className="st-group">
-          <button className={`st-tab t-day${viewShift==='day'?' active':''}`} onClick={()=>setViewShift('day')}><div className="dot"></div>CNC/VMC Day</button>
-          <button className={`st-tab t-night${viewShift==='night'?' active':''}`} onClick={()=>setViewShift('night')}><div className="dot"></div>CNC/VMC Night</button>
-        </div>
-        <div className="st-divider"></div>
-        <div className="st-group">
-          <button className={`st-tab t-manual${viewShift==='manual'?' active':''}`} onClick={()=>setViewShift('manual')}><div className="dot"></div>Manual</button>
-        </div>
+        {currentUser.role==='operator'&&(
+          <>
+            <div className="st-group">
+              <button className={`st-tab${view==='myshift'?' active':''}`} onClick={()=>setView('myshift')}>My shift</button>
+              <button className={`st-tab${view==='floor'?' active':''}`} onClick={()=>setView('floor')}>Floor</button>
+            </div>
+            {view!=='myshift'&&<div className="st-divider"></div>}
+          </>
+        )}
+        {view!=='myshift'&&(
+          <>
+            <div className="st-group">
+              <button className={`st-tab t-day${viewShift==='day'?' active':''}`} onClick={()=>setViewShift('day')}><div className="dot"></div>CNC/VMC Day</button>
+              <button className={`st-tab t-night${viewShift==='night'?' active':''}`} onClick={()=>setViewShift('night')}><div className="dot"></div>CNC/VMC Night</button>
+            </div>
+            <div className="st-divider"></div>
+            <div className="st-group">
+              <button className={`st-tab t-manual${viewShift==='manual'?' active':''}`} onClick={()=>setViewShift('manual')}><div className="dot"></div>Manual</button>
+            </div>
+          </>
+        )}
       </div>
       <div className="topbar-right">
         <div className="live-clock">{clock.toLocaleTimeString('en-IN',{hour12:false})}</div>

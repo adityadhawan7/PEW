@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import Modal from './Modal.jsx';
+import PageView from './PageView.jsx';
 import { todayStr, orderDueState, orderProgress, finishedOnHand } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
-// ── Orders Modal ───────────────────────────────────────────
+// ── Customer orders (full-page view) ───────────────────────
 // Customer orders: multi-line (one line per casting type), tracked by dispatches made against
 // them from the Stock modal's Stock out tab. Quantities and dates only — no pricing (accounting
 // is out of scope). Orders are cancelled, never deleted, so history survives.
-export default function OrdersModal({orders,writeOrders,castingTypes,wip,currentUser,onClose}) {
+export default function OrdersView({orders,writeOrders,castingTypes,wip,currentUser,onBack}) {
   const [filter,setFilter]=useState('open');
   const [form,setForm]=useState(null); // null | {editingId, customer, poRef, dueDate, notes, items:[{castingTypeId, qty}]}
   const [msg,setMsg]=useState('');
@@ -80,7 +80,7 @@ export default function OrdersModal({orders,writeOrders,castingTypes,wip,current
   };
 
   return (
-    <Modal onClose={onClose} title="Customer orders" wide>
+    <PageView title="Customer orders" onBack={onBack}>
       {!form?(
         <>
           <p className="modal-note">Track what's promised to customers and dispatch against it from Stock → Stock out. Orders flag ⚠ from 3 days before their due date until fully dispatched.</p>
@@ -155,6 +155,6 @@ export default function OrdersModal({orders,writeOrders,castingTypes,wip,current
           </div>
         </>
       )}
-    </Modal>
+    </PageView>
   );
 }

@@ -13,7 +13,7 @@ export default function Topbar({
   viewShift, setViewShift, clock, isAdmin, currentUser, onLogout,
   setShowOnline, setShowDownload, setShowBreakdownHistory, setShowProd,
   setShowAssign, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
-  setShowOrders, ordersAttention, setShowMaintenance, maintAttention, setShowInspections,
+  ordersAttention, setShowMaintenance, maintAttention, setShowInspections,
   setShowAssemblyModels, setShowPurchasedComponents,
   view, setView,
 }) {
@@ -43,7 +43,7 @@ export default function Topbar({
   const sections=[
     {id:'materials',label:'Materials',badgeCount:ordersAttention,items:[
       {label:'Stock',active:view==='stock',onClick:goView('stock')},
-      {label:'Orders',badgeCount:ordersAttention,onClick:act(setShowOrders)},
+      {label:'Orders',badgeCount:ordersAttention,active:view==='orders',onClick:goView('orders')},
       {label:'Purchased components',onClick:act(setShowPurchasedComponents)},
     ]},
     {id:'quality',label:'Quality',badgeCount:maintAttention,items:[

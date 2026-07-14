@@ -5,7 +5,7 @@ import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShif
 
 import UserModal from '../UserModal.jsx';
 import MachinesModal from '../MachinesModal.jsx';
-import OrdersModal from '../OrdersModal.jsx';
+import OrdersView from '../OrdersView.jsx';
 import MaintenanceModal from '../MaintenanceModal.jsx';
 import InspectionLogModal from '../InspectionLogModal.jsx';
 import PurchasedComponentsModal from '../PurchasedComponentsModal.jsx';
@@ -52,7 +52,6 @@ export default function Dashboard({currentUser,onLogout}) {
   const [wageLog,setWageLog]=useState([]);
   const [adjustments,setAdjustments]=useState([]);
   const [orders,setOrders]=useState([]);
-  const [showOrders,setShowOrders]=useState(false);
   const [maintSchedules,setMaintSchedules]=useState([]);
   const [maintLog,setMaintLog]=useState([]);
   const [showMaintenance,setShowMaintenance]=useState(false);
@@ -400,7 +399,6 @@ export default function Dashboard({currentUser,onLogout}) {
       {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
       {showDownload&&<DownloadModal alerts={alerts} onClose={()=>setShowDownload(false)}/>}
       {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
-      {showOrders&&<OrdersModal orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onClose={()=>setShowOrders(false)}/>}
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
       {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
@@ -419,7 +417,7 @@ export default function Dashboard({currentUser,onLogout}) {
         setShowOnline={setShowOnline} setShowDownload={setShowDownload} setShowBreakdownHistory={setShowBreakdownHistory}
         setShowProd={setShowProd} setShowAssign={setShowAssign}
         setShowAttendance={setShowAttendance} setShowWageRegister={setShowWageRegister} setShowUser={setShowUser}
-        setShowMachines={setShowMachines} setShowOrders={setShowOrders} ordersAttention={ordersAttention}
+        setShowMachines={setShowMachines} ordersAttention={ordersAttention}
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
         setShowInspections={setShowInspections}
         setShowAssemblyModels={setShowAssemblyModels} setShowPurchasedComponents={setShowPurchasedComponents}
@@ -437,6 +435,8 @@ export default function Dashboard({currentUser,onLogout}) {
           assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents}
           onBack={()=>setView('floor')}
         />
+      ):safeView==='orders'?(
+        <OrdersView orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='myshift'?(
       <div className="main-layout">
         <div className="content-area">

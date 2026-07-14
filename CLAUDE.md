@@ -64,13 +64,22 @@ src/
       Dashboard.jsx    — owns ALL state (~25 useState), effects, and handlers; the
                          single source of truth for machines/alerts/castingTypes/wip/etc.
       Topbar.jsx, ShiftBanner.jsx, StatsRow.jsx, MachineGrid.jsx, OutputChart.jsx,
-      ShiftOverview.jsx, MachineDetailPanel.jsx, AlertsPanel.jsx, AlertItem.jsx
+      ShiftOverview.jsx, MachineDetailPanel.jsx, AlertsPanel.jsx, AlertItem.jsx,
+      OperatorHome.jsx, ProductionActions.jsx
                        — presentational subcomponents; they receive state and setters
                          as props from Dashboard and contain no Firestore calls of
                          their own (except via callbacks passed down).
 ```
 
 `Dashboard.jsx` is the one file where nearly everything converges — any change to machine/shift/casting-type state, or to which modal is open, touches this file. When adding a new modal or dashboard panel, follow the existing pattern: state and `fb.set` calls live in `Dashboard.jsx`, the panel itself is a prop-driven component with no direct Firestore access.
+
+## Navigation — views and the grouped topbar
+
+Dashboard's `view` state is three-valued: `'floor'` (default for staff — the machine grid main layout), `'analytics'` (full-page AnalyticsView swap, admin+supervisor), and `'myshift'` (operator home, the **default for `role==='operator'`** and only reachable by operators via My shift / Floor tabs in the shift-tabs row). The shift selector tabs and ShiftBanner are hidden while on `'myshift'` — the operator home spans all shifts, so a viewShift selector there would mislead.
+
+**OperatorHome** (`'myshift'`) renders one card per assignment slot via `operatorAssignments(machines, username)` in `utils.js` — a cnc machine assigned to the same operator on day AND night yields two cards, each carrying its own `shiftKey` (never `viewShift`). Cards embed **ProductionActions** (extracted from MachineDetailPanel, shared by both — the `{machine, pj, shiftKey, mode}` payloads it sends to `setLogProgressData`/`setShiftCompleteData`/`setLineInspectionData` are load-bearing for `handleShiftComplete` and wage logging; its `compact` prop hides the job/target lines the card header already shows). Breakdown-status cards show a danger notice and no actions (repair is admin-only, on the floor view). The alerts feed stays in the sidebar (read-only for operators).
+
+**Topbar** groups staff actions into four data-driven dropdown sections — Materials (Stock, Orders ⚠, Purchased components), Quality (Inspections, Maintenance ⚠, Breakdown history), Insights (Analytics, Download report), Manage (Production jobs, Assembly models, + `role==='admin'` only: Machines, Users, Attendance, Wages) — plus standalone Floor, Assign jobs (most-used staff action, deliberately not buried in a menu), Online (all roles), and Sign out. Section buttons inherit their items' ⚠ badges (Materials←ordersAttention, Quality←maintAttention). Each `.tb-group` renders both a desktop dropdown trigger (`.tb-group-btn`) and a mobile group header (`.tb-group-hdr`); CSS picks the presentation per breakpoint (≤900px = flat grouped list inside the hamburger panel), no JS media query. When adding a staff feature, add an item to the right section's config array in Topbar.jsx — don't add a new top-level button.
 
 ## Domain model — shifts, casting types, routing
 

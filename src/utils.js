@@ -202,6 +202,35 @@ export function maintenanceDueState(schedule, today, leadDays=7){
   return dueStateForDate(maintenanceDueDate(schedule), today, leadDays);
 }
 
+// One pass over everything that can demand staff attention, for the floor view's attention
+// strip and the Topbar section badges (computed from the same source so they can never
+// disagree). Low-stock predicates are deliberately byte-identical to the inline ones in
+// StockModal/PurchasedComponentsModal (inclusive <=, no coercion). pendingReviews counts the
+// only two producers of data.status==='pending': shortfall reviews (handleShiftComplete) and
+// setting approvals (handleSubmitSettingInspection).
+export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],purchasedComponents=[],alerts=[],today}){
+  const split=(list,stateFn)=>{
+    let overdue=0,dueSoon=0;
+    for(const x of list){
+      const st=stateFn(x,today);
+      if(st==='overdue') overdue++;
+      else if(st==='dueSoon') dueSoon++;
+    }
+    return {overdue,dueSoon,total:overdue+dueSoon};
+  };
+  const lowStockItems=[
+    ...castingTypes.filter(s=>s.rawBalance<=s.lowThreshold).map(s=>({kind:'casting',name:s.name,balance:s.rawBalance,unit:s.unit})),
+    ...purchasedComponents.filter(p=>p.balance<=p.lowThreshold).map(p=>({kind:'purchased',name:p.name,balance:p.balance,unit:p.unit})),
+  ];
+  const pendingReviews=alerts.filter(a=>a.data&&a.data.status==='pending'&&(a.data.category==='shortfall'||a.data.category==='setting_review')).length;
+  return {
+    orders:split(orders,orderDueState),
+    maint:split(maintSchedules,maintenanceDueState),
+    lowStock:{count:lowStockItems.length,items:lowStockItems},
+    pendingReviews,
+  };
+}
+
 // Records a dispatch of `qty` pieces of one casting type against an order: increments that
 // line's dispatched count (allowed to exceed qty — record what physically shipped) and
 // auto-completes the order once EVERY line has dispatched >= qty. Pure — returns a new array;

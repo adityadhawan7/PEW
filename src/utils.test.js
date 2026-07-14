@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1077,5 +1077,80 @@ describe('operatorAssignments', () => {
   it('preserves fleet order across a mixed fleet', () => {
     const res = operatorAssignments([cnc('CNC1', null, 'ravi'), manual('D1', 'ravi'), cnc('CNC2', 'ravi', null)], 'ravi');
     expect(res.map(r => `${r.machine.id}:${r.shiftKey}`)).toEqual(['CNC1:night', 'D1:manual', 'CNC2:day']);
+  });
+});
+
+describe('attentionSummary', () => {
+  const TODAY = '2026-07-14';
+  const order = (dueDate, status = 'open') => ({ id: 1, customer: 'X', dueDate, status, items: [] });
+  const sched = (lastDoneDate, intervalDays) => ({ id: 1, machineId: 'CNC1', title: 'Oil', lastDoneDate, intervalDays });
+
+  it('returns all zeros and empty items for empty inputs', () => {
+    const res = attentionSummary({ today: TODAY });
+    expect(res.orders).toEqual({ overdue: 0, dueSoon: 0, total: 0 });
+    expect(res.maint).toEqual({ overdue: 0, dueSoon: 0, total: 0 });
+    expect(res.lowStock).toEqual({ count: 0, items: [] });
+    expect(res.pendingReviews).toBe(0);
+  });
+
+  it('splits orders into overdue/dueSoon and excludes non-open and undated orders', () => {
+    const orders = [
+      order('2026-07-10'),                 // overdue
+      order('2026-07-16'),                 // due soon (3-day lead)
+      order('2026-08-01'),                 // ok
+      order('2026-07-01', 'completed'),    // excluded — not open
+      order(undefined),                    // excluded — no due date
+    ];
+    const res = attentionSummary({ orders, today: TODAY });
+    expect(res.orders).toEqual({ overdue: 1, dueSoon: 1, total: 2 });
+  });
+
+  it('splits maintenance by the 7-day lead and excludes schedules without lastDoneDate', () => {
+    const maintSchedules = [
+      sched('2026-06-01', 30),  // due 2026-07-01 → overdue
+      sched('2026-07-01', 15),  // due 2026-07-16 → dueSoon
+      sched('2026-07-10', 60),  // due 2026-09-08 → ok
+      sched(null, 30),          // excluded
+    ];
+    const res = attentionSummary({ maintSchedules, today: TODAY });
+    expect(res.maint).toEqual({ overdue: 1, dueSoon: 1, total: 2 });
+  });
+
+  it('aggregates low stock across casting types and purchased components, threshold inclusive', () => {
+    const castingTypes = [
+      { id: 1, name: 'CI Plate', rawBalance: 5, lowThreshold: 5, unit: 'pcs' },   // at threshold — counts
+      { id: 2, name: 'CI Cover', rawBalance: 50, lowThreshold: 5, unit: 'pcs' },  // fine
+    ];
+    const purchasedComponents = [
+      { id: 1, name: 'Lever kit', balance: 2, lowThreshold: 10, unit: 'pcs' },    // low
+      { id: 2, name: 'Spring kit', balance: 20, lowThreshold: 10, unit: 'pcs' },  // fine
+      { id: 3, name: 'No threshold', balance: 0, unit: 'pcs' },                   // undefined threshold — excluded
+    ];
+    const res = attentionSummary({ castingTypes, purchasedComponents, today: TODAY });
+    expect(res.lowStock.count).toBe(2);
+    expect(res.lowStock.items).toEqual([
+      { kind: 'casting', name: 'CI Plate', balance: 5, unit: 'pcs' },
+      { kind: 'purchased', name: 'Lever kit', balance: 2, unit: 'pcs' },
+    ]);
+  });
+
+  it('counts only pending shortfall and setting_review alerts', () => {
+    const alerts = [
+      { id: 1, data: { category: 'shortfall', status: 'pending' } },        // counts
+      { id: 2, data: { category: 'setting_review', status: 'pending' } },   // counts
+      { id: 3, data: { category: 'shortfall', status: 'approved' } },       // settled
+      { id: 4, data: { category: 'setting_review', status: 'disapproved' } }, // settled
+      { id: 5, data: { category: 'production', status: null } },            // not a review
+      { id: 6, msg: 'plain info alert' },                                   // no data
+    ];
+    const res = attentionSummary({ alerts, today: TODAY });
+    expect(res.pendingReviews).toBe(2);
+  });
+
+  it('is deterministic on the passed today', () => {
+    const orders = [order('2026-07-16')];
+    expect(attentionSummary({ orders, today: '2026-07-14' }).orders.dueSoon).toBe(1);
+    expect(attentionSummary({ orders, today: '2026-06-01' }).orders.total).toBe(0);
+    expect(attentionSummary({ orders, today: '2026-07-20' }).orders.overdue).toBe(1);
   });
 });

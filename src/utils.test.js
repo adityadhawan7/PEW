@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1021,5 +1021,61 @@ describe('wage_log shape produced by an assembly shift', () => {
     const assemblyEntry = { produced: 25, target: model.target, ratePerHour: model.ratePerHour, status: 'ok' };
     const castingEntry = { produced: 25, target: 20, ratePerHour: 2.5, status: 'ok' };
     expect(computeShiftPay(assemblyEntry, 500)).toEqual(computeShiftPay(castingEntry, 500));
+  });
+});
+
+describe('operatorAssignments', () => {
+  const cnc = (id, dayOp, nightOp) => ({
+    id, name: `CNC ${id}`, shift: 'cnc_vmc',
+    shifts: {
+      day: { assignedOperator: dayOp, operator: dayOp, prodCount: 10, shiftComplete: false },
+      night: { assignedOperator: nightOp, operator: nightOp, prodCount: 20, shiftComplete: false },
+    },
+  });
+  const manual = (id, op) => ({ id, name: `Drill ${id}`, shift: 'manual', assignedOperator: op, operator: op, prodCount: 5 });
+
+  it('returns one merged entry for a day-only cnc assignment', () => {
+    const res = operatorAssignments([cnc('CNC1', 'ravi', null)], 'ravi');
+    expect(res).toHaveLength(1);
+    expect(res[0].shiftKey).toBe('day');
+    expect(res[0].machine.prodCount).toBe(10);
+    expect(res[0].machine.id).toBe('CNC1');
+  });
+
+  it('returns two entries (day then night) when both slots are assigned to the same operator', () => {
+    const res = operatorAssignments([cnc('CNC1', 'ravi', 'ravi')], 'ravi');
+    expect(res.map(r => r.shiftKey)).toEqual(['day', 'night']);
+    expect(res[0].machine.prodCount).toBe(10);
+    expect(res[1].machine.prodCount).toBe(20);
+  });
+
+  it('returns shiftKey manual for flat machines', () => {
+    const res = operatorAssignments([manual('D1', 'ravi')], 'ravi');
+    expect(res).toHaveLength(1);
+    expect(res[0].shiftKey).toBe('manual');
+    expect(res[0].machine.prodCount).toBe(5);
+  });
+
+  it('excludes machines assigned to other operators or nobody', () => {
+    const res = operatorAssignments([cnc('CNC1', 'suresh', null), manual('D1', null), manual('D2', 'suresh')], 'ravi');
+    expect(res).toEqual([]);
+  });
+
+  it('returns [] for a null/undefined username even when machines have assignedOperator null', () => {
+    expect(operatorAssignments([manual('D1', null), cnc('CNC1', null, null)], null)).toEqual([]);
+    expect(operatorAssignments([manual('D1', null)], undefined)).toEqual([]);
+  });
+
+  it('picks up legacy flat cnc_vmc machines (no shifts object) via the day-slot migration', () => {
+    const legacy = { id: 'CNC9', name: 'CNC 9', shift: 'cnc_vmc', assignedOperator: 'ravi', operator: 'ravi', prodCount: 7 };
+    const res = operatorAssignments([legacy], 'ravi');
+    expect(res).toHaveLength(1);
+    expect(res[0].shiftKey).toBe('day');
+    expect(res[0].machine.prodCount).toBe(7);
+  });
+
+  it('preserves fleet order across a mixed fleet', () => {
+    const res = operatorAssignments([cnc('CNC1', null, 'ravi'), manual('D1', 'ravi'), cnc('CNC2', 'ravi', null)], 'ravi');
+    expect(res.map(r => `${r.machine.id}:${r.shiftKey}`)).toEqual(['CNC1:night', 'D1:manual', 'CNC2:day']);
   });
 });

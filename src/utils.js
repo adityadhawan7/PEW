@@ -724,6 +724,26 @@ export function patchMachineShift(machines,machineId,shiftKey,patch){
     return {...m,shifts:{...(m.shifts||{}),[shiftKey]:{...current,...patch}}};
   });
 }
+// All of an operator's assignment slots across every shift, for the operator home screen.
+// cnc_vmc machines contribute one entry per assigned slot (day and/or night — the same machine
+// can appear twice); manual/assembly machines contribute at most one entry with shiftKey
+// 'manual'. Each entry's machine is already slot-merged (withShift), so callers read prodCount,
+// shiftComplete, etc. directly off it.
+export function operatorAssignments(machines,username){
+  if(!username) return [];
+  const out=[];
+  for(const m of machines||[]){
+    if(m.shift==='cnc_vmc'){
+      for(const shiftKey of ['day','night']){
+        const merged=withShift(m,shiftKey);
+        if(merged.assignedOperator===username) out.push({machine:merged,shiftKey});
+      }
+    } else if(m.assignedOperator===username){
+      out.push({machine:m,shiftKey:'manual'});
+    }
+  }
+  return out;
+}
 
 export function initMachines() {
   return MACHINES_SEED.map(def => {

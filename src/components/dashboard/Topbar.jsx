@@ -12,7 +12,7 @@ import { initials } from '../../utils.js';
 export default function Topbar({
   viewShift, setViewShift, clock, isAdmin, currentUser, onLogout,
   setShowOnline, setShowDownload, setShowBreakdownHistory, setShowProd,
-  setShowAssign, setShowStock, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
+  setShowAssign, setShowAttendance, setShowWageRegister, setShowUser, setShowMachines,
   setShowOrders, ordersAttention, setShowMaintenance, maintAttention, setShowInspections,
   setShowAssemblyModels, setShowPurchasedComponents,
   view, setView,
@@ -42,7 +42,7 @@ export default function Topbar({
   const badge=n=>n>0?<span style={{color:'var(--warn)'}}> ⚠{n}</span>:null;
   const sections=[
     {id:'materials',label:'Materials',badgeCount:ordersAttention,items:[
-      {label:'Stock',onClick:act(setShowStock)},
+      {label:'Stock',active:view==='stock',onClick:goView('stock')},
       {label:'Orders',badgeCount:ordersAttention,onClick:act(setShowOrders)},
       {label:'Purchased components',onClick:act(setShowPurchasedComponents)},
     ]},

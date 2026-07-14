@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import Modal from './Modal.jsx';
+import PageView from './PageView.jsx';
 import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
 import { todayStr, nowStr, fullTs, routeNodeIds, getWip, applyDispatchToOrder, finishedOnHand } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
-// ── Stock Modal ────────────────────────────────────────────
-export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stockLog,setStockLog,orders,writeOrders,assemblyModels,purchasedComponents,writePurchasedComponents,onClose}) {
+// ── Stock control (full-page view) ─────────────────────────
+export default function StockView({castingTypes,setCastingTypes,wip,setWip,stockLog,setStockLog,orders,writeOrders,assemblyModels,purchasedComponents,writePurchasedComponents,onBack}) {
   const [inForm,setInForm]=useState({kind:'casting',typeId:'',qty:'',supplier:'',note:''});
   const [inMsg,setInMsg]=useState('');
   const [outForm,setOutForm]=useState({typeId:'',qty:'',orderId:'',customer:'',note:''});
@@ -173,7 +173,7 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
   };
 
   return (
-    <Modal onClose={onClose} title="Stock control" wide>
+    <PageView title="Stock control" onBack={onBack}>
       <div className="role-chips" style={{marginBottom:'1rem'}}>
         <div className={`role-chip${tab==='balances'?' active':''}`} onClick={()=>setTab('balances')}>Balances</div>
         <div className={`role-chip${tab==='in'?' active':''}`} onClick={()=>setTab('in')}>Stock in</div>
@@ -404,7 +404,7 @@ export default function StockModal({castingTypes,setCastingTypes,wip,setWip,stoc
           </div>
         </>
       )}
-    </Modal>
+    </PageView>
   );
 }
 

@@ -17,7 +17,7 @@ import AssignModal from '../AssignModal.jsx';
 import OnlineModal from '../OnlineModal.jsx';
 import DownloadModal from '../DownloadModal.jsx';
 import BreakdownHistoryModal from '../BreakdownHistoryModal.jsx';
-import StockModal from '../StockModal.jsx';
+import StockView from '../StockView.jsx';
 import AttendanceModal from '../AttendanceModal.jsx';
 import WageRegisterModal from '../WageRegisterModal.jsx';
 import ShiftCompleteModal from '../ShiftCompleteModal.jsx';
@@ -63,8 +63,9 @@ export default function Dashboard({currentUser,onLogout}) {
   const [purchasedComponents,setPurchasedComponents]=useState([]);
   const [showPurchasedComponents,setShowPurchasedComponents]=useState(false);
   const [shiftCompleteBlockedShortages,setShiftCompleteBlockedShortages]=useState(null);
-  // 'floor' | 'analytics' | 'myshift' — operators land on their own focused home screen;
-  // 'myshift' is only ever reachable for operators (the tabs that set it are operator-only).
+  // 'floor' | 'analytics' | 'myshift' | 'stock' | 'orders' | 'wages' — operators land on their
+  // own focused home screen ('myshift', only reachable via the operator-only tabs); the last
+  // four are staff full-page views swapped in place of the floor layout (AnalyticsView pattern).
   const [view,setView]=useState(currentUser.role==='operator'?'myshift':'floor');
   const [sessions,setSessions]=useState({});
   const [clock,setClock]=useState(new Date());
@@ -75,7 +76,6 @@ export default function Dashboard({currentUser,onLogout}) {
   const [showOnline,setShowOnline]=useState(false);
   const [showDownload,setShowDownload]=useState(false);
   const [showBreakdownHistory,setShowBreakdownHistory]=useState(false);
-  const [showStock,setShowStock]=useState(false);
   const [showAttendance,setShowAttendance]=useState(false);
   const [showWageRegister,setShowWageRegister]=useState(false);
   const [shiftCompleteData,setShiftCompleteData]=useState(null);
@@ -377,6 +377,12 @@ export default function Dashboard({currentUser,onLogout}) {
   const cfg=SHIFT_CFG[viewShift];
   const ordersAttention=orders.filter(o=>['overdue','dueSoon'].includes(orderDueState(o,todayStr()))).length;
   const maintAttention=maintSchedules.filter(s=>['overdue','dueSoon'].includes(maintenanceDueState(s,todayStr()))).length;
+  // Defensive: a view a role isn't entitled to falls back to that role's home. In practice
+  // unreachable (every setter is role-gated and role is fixed per session) — belt and braces.
+  const safeView=
+    ((view==='stock'||view==='orders'||view==='analytics')&&!isAdmin)?'floor':
+    (view==='wages'&&currentUser.role!=='admin')?'floor': // NOT isAdmin — supervisors must never see pay data
+    view;
   const rawSelectedM=machines.find(x=>x.id===selectedMachine);
   const selectedM=rawSelectedM?withShift(rawSelectedM,viewShift):null;
   const overviewCounts={day:5,night:5,manual:machines.filter(m=>m.shift==='manual').length};
@@ -394,7 +400,6 @@ export default function Dashboard({currentUser,onLogout}) {
       {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
       {showDownload&&<DownloadModal alerts={alerts} onClose={()=>setShowDownload(false)}/>}
       {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
-      {showStock&&<StockModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip} stockLog={stockLog} setStockLog={setStockLog} orders={orders} writeOrders={writeOrders} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents} onClose={()=>setShowStock(false)}/>}
       {showOrders&&<OrdersModal orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onClose={()=>setShowOrders(false)}/>}
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
@@ -412,7 +417,7 @@ export default function Dashboard({currentUser,onLogout}) {
         viewShift={viewShift} setViewShift={setViewShift} clock={clock} isAdmin={isAdmin}
         currentUser={currentUser} onLogout={onLogout}
         setShowOnline={setShowOnline} setShowDownload={setShowDownload} setShowBreakdownHistory={setShowBreakdownHistory}
-        setShowProd={setShowProd} setShowAssign={setShowAssign} setShowStock={setShowStock}
+        setShowProd={setShowProd} setShowAssign={setShowAssign}
         setShowAttendance={setShowAttendance} setShowWageRegister={setShowWageRegister} setShowUser={setShowUser}
         setShowMachines={setShowMachines} setShowOrders={setShowOrders} ordersAttention={ordersAttention}
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
@@ -423,9 +428,16 @@ export default function Dashboard({currentUser,onLogout}) {
 
       {view!=='myshift'&&<ShiftBanner viewShift={viewShift} cfg={cfg}/>}
 
-      {view==='analytics'?(
+      {safeView==='analytics'?(
         <AnalyticsView wageLog={wageLog} stockLog={stockLog} alerts={alerts} maintLog={maintLog} machines={machines} castingTypes={castingTypes}/>
-      ):view==='myshift'?(
+      ):safeView==='stock'?(
+        <StockView
+          castingTypes={castingTypes} setCastingTypes={setCastingTypes} wip={wip} setWip={setWip}
+          stockLog={stockLog} setStockLog={setStockLog} orders={orders} writeOrders={writeOrders}
+          assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents}
+          onBack={()=>setView('floor')}
+        />
+      ):safeView==='myshift'?(
       <div className="main-layout">
         <div className="content-area">
           <OperatorHome
@@ -449,7 +461,7 @@ export default function Dashboard({currentUser,onLogout}) {
           {isAdmin&&castingTypes.some(s=>s.rawBalance<=s.lowThreshold)&&(
             <div className="info-box danger" style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,flexWrap:'wrap'}}>
               <span>⚠ Low stock: {castingTypes.filter(s=>s.rawBalance<=s.lowThreshold).map(s=>`${s.name} (${s.rawBalance}${s.unit})`).join(', ')}</span>
-              <button className="small-btn" onClick={()=>setShowStock(true)}>View stock</button>
+              <button className="small-btn" onClick={()=>setView('stock')}>View stock</button>
             </div>
           )}
 

@@ -1,10 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { fb } from './firebase.js';
 import LoginScreen from './components/LoginScreen.jsx';
-import Dashboard from './components/dashboard/Dashboard.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ToastHost from './components/ToastHost.jsx';
 import { toast } from './toast.js';
+import { lazyWithReload } from './lazyWithReload.js';
+
+// The Dashboard tree (and everything it imports) loads after login — every user lands on
+// LoginScreen first, so the initial download stays lean.
+const Dashboard=lazyWithReload(()=>import('./components/dashboard/Dashboard.jsx'));
 
 export default function App() {
   const [currentUser,setCurrentUser]=useState(null);
@@ -84,7 +88,9 @@ export default function App() {
     <>
       {!currentUser
         ?<LoginScreen onLogin={handleLogin} revokedMsg={revokedMsg}/>
-        :<Dashboard currentUser={currentUser} onLogout={handleLogout}/>}
+        :<Suspense fallback={<div className="loading-spin">Loading FactoryOS…</div>}>
+          <Dashboard currentUser={currentUser} onLogout={handleLogout}/>
+        </Suspense>}
       {!online&&<div className="offline-banner">⚡ Offline — keep this screen open; changes sync when the connection returns</div>}
       <ConfirmDialog/>
       <ToastHost/>

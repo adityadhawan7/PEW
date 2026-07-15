@@ -15,6 +15,22 @@
   --r:8px;--r2:12px;
   --shadow-1:0 1px 2px rgb(0 0 0/.35);--shadow-2:0 4px 12px rgb(0 0 0/.35);--shadow-3:0 16px 48px rgb(0 0 0/.5);
 }
+/* Light palette follows the device setting. Accents are darkened versions of the same hues —
+   they double as text colors (links, active items) and must pass contrast on white. */
+@media (prefers-color-scheme: light){
+  :root{
+    color-scheme:light;
+    --bg:#eff1f5;--bg2:#ffffff;--bg3:#f8f9fb;--bg4:#eceef4;--bg5:#e2e6ee;
+    --border:#e2e5ec;--border2:#c9cfda;
+    --accent:#2c6fd6;--accent2:#d96436;--accent3:#1d9e5f;
+    --day:#a8751a;--night:#5a63c9;--manual:#1d9e5f;
+    --warn:#a8751a;--danger:#d43a33;
+    --text:#1b2130;--text2:#4d5670;--text3:#8a92a8;
+    --on-accent:#fff;
+    --backdrop:rgb(23 30 46/.45);--backdrop2:rgb(23 30 46/.35);
+    --shadow-1:0 1px 2px rgb(23 30 46/.08);--shadow-2:0 4px 12px rgb(23 30 46/.10);--shadow-3:0 16px 48px rgb(23 30 46/.16);
+  }
+}
 body{background:var(--bg)}
 #root{
   font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);min-height:100vh;

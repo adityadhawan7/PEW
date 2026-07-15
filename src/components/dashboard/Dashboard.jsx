@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { fb } from '../../firebase.js';
+import { toast } from '../../toast.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
 import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary } from '../../utils.js';
 
@@ -176,6 +177,7 @@ export default function Dashboard({currentUser,onLogout}) {
     setMachines(updated); fb.set('machines',updated);
     const a={id:Date.now(),type:'info',msg:`✓ ${m.name} (${shiftKey} shift) marked repaired by ${currentUser.name} — ${assessment}`,data:{machine:m.name,machineId:m.id,shiftKey,operator:m.operator,reason:assessment,category:'repair',decidedBy:currentUser.name},time:nowStr(),date:todayStr(),ts:fullTs()};
     writeAlerts([a,...alerts].slice(0,200));
+    toast('\u2713 Machine marked repaired');
     setRepairData(null);
   };
 
@@ -186,6 +188,7 @@ export default function Dashboard({currentUser,onLogout}) {
     setMachines(updated); fb.set('machines',updated);
     const a={id:Date.now(),type:'danger',msg:`⚠ ${m.name} breakdown — ${reason}`,data:{machine:m.name,machineId:m.id,shiftKey,operator:m.operator,reason,category:'breakdown'},time:nowStr(),date:todayStr(),ts:fullTs()};
     writeAlerts([a,...alerts].slice(0,200));
+    toast('\u2713 Breakdown reported \u2014 flagged on the floor');
     setBreakdownData(null);
   };
 
@@ -194,6 +197,7 @@ export default function Dashboard({currentUser,onLogout}) {
     const {machine:m,shiftKey}=logProgressData;
     const updated=patchMachineShift(machines,m.id,shiftKey,{prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
     setMachines(updated); fb.set('machines',updated);
+    toast('\u2713 Progress saved');
     setLogProgressData(null);
   };
 
@@ -209,6 +213,7 @@ export default function Dashboard({currentUser,onLogout}) {
     const filledRows=rows.filter(r=>r.specification.trim()||r.piece1.trim()||r.piece2.trim());
     const entry={id:'insp_'+a.id,kind:'setting',alertId:a.id,machineId:m.id,machineName:m.name,operator:m.operator||null,shiftKey,rows:filledRows,recordedBy:m.operator||currentUser.name,status:'pending',decisionNote:null,decidedBy:null,date:todayStr(),time:nowStr(),ts:fullTs()};
     writeInspectionLog([entry,...inspectionLog].slice(0,1000));
+    toast('\u2713 Setting approval submitted for review');
     setLineInspectionData(null);
   };
 
@@ -221,6 +226,7 @@ export default function Dashboard({currentUser,onLogout}) {
     pushAlert('info',`🔍 ${m.name} (${shiftKey} shift): line inspection recorded by ${currentUser.name} — ${filledRows.length} spec${filledRows.length!==1?'s':''} checked`,{machine:m.name,machineId:m.id,operator:m.operator,shiftKey,rows,category:'line_inspection',inspectedBy:currentUser.name});
     const entry={id:Date.now(),kind:'inspection',alertId:null,machineId:m.id,machineName:m.name,operator:m.operator||null,shiftKey,rows:filledRows,recordedBy:currentUser.name,status:null,decisionNote:null,decidedBy:null,date:todayStr(),time:nowStr(),ts:fullTs()};
     writeInspectionLog([entry,...inspectionLog].slice(0,1000));
+    toast('\u2713 Line inspection recorded');
     setLineInspectionData(null);
   };
 
@@ -242,6 +248,7 @@ export default function Dashboard({currentUser,onLogout}) {
     if(inspectionLog.some(e=>e.alertId===alertId)){
       writeInspectionLog(inspectionLog.map(e=>e.alertId===alertId?{...e,status:decision,decisionNote:note,decidedBy:currentUser.name}:e));
     }
+    toast('\u2713 Setting decision saved');
     setSettingDecisionData(null);
   };
 
@@ -345,6 +352,7 @@ export default function Dashboard({currentUser,onLogout}) {
       };
       writeWageLog([entry,...wageLog].slice(0,2000));
     }
+    toast(`\u2713 ${m.name}: shift complete \u2014 ${total} units logged`);
     setShiftCompleteData(null);
   };
 
@@ -360,6 +368,7 @@ export default function Dashboard({currentUser,onLogout}) {
     if(wageLog.some(e=>e.alertId===alertId)){
       writeWageLog(wageLog.map(e=>e.alertId===alertId?{...e,status:decision,decisionNote:note,decidedBy:currentUser.name}:e));
     }
+    toast('\u2713 Decision saved');
     setDecisionData(null);
   };
 

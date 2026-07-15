@@ -4,7 +4,6 @@ import {
   getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
 } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,7 +26,6 @@ setPersistence(auth, browserSessionPersistence);
 
 const USERS_COL = 'factoryos_users';
 const toEmail = username => `${username.trim().toLowerCase()}@factoryos.local`;
-const functionsInstance = getFunctions(app);
 
 export const fb = {
   async get(key) {
@@ -98,8 +96,11 @@ export const fb = {
   },
   // Admin only, enforced inside the deleteUserAccount Cloud Function (functions/index.js).
   // Deletes both the Firebase Auth credential and the profile doc — full revocation in one call.
+  // firebase/functions is imported on demand — this is the only call site, admin-only, so the
+  // SDK's functions module stays out of everyone else's initial download.
   async deleteUserProfile(uid) {
-    const deleteUserAccount = httpsCallable(functionsInstance, 'deleteUserAccount');
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const deleteUserAccount = httpsCallable(getFunctions(app), 'deleteUserAccount');
     await deleteUserAccount({ uid });
     return true;
   },

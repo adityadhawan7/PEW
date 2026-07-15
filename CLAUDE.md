@@ -36,7 +36,7 @@ Almost all Firestore reads/writes for operational data happen inside `Dashboard.
 
 ## Authentication
 
-Firebase Authentication (Email/Password) gates all Firestore access — see `firestore.rules` in the repo root. Usernames aren't emails, so sign-in uses a synthetic address under the hood (`${username}@factoryos.local`, see `toEmail` in `firebase.js`); the UI still shows a plain username field. Session persistence is `browserSessionPersistence` (cleared on browser close) — deliberate, since shop-floor terminals get handed off between operators across shifts and must not carry a stale login.
+Firebase Authentication (Email/Password) gates all Firestore access — see `firestore.rules` in the repo root. Usernames aren't emails, so sign-in uses a synthetic address under the hood (`${username}@factoryos.local`, see `toEmail` in `firebase.js`); the UI still shows a plain username field. Persistence is **per-login**: the default is `browserSessionPersistence` (cleared on browser close) — deliberate, since shop-floor terminals get handed off between operators across shifts and must not carry a stale login — but the login screen's "Keep me signed in on this device" checkbox switches that sign-in to `browserLocalPersistence` for operators' personal phones (`fb.signIn(username, password, remember)`; the checkbox preference itself is remembered per device in `localStorage['fos_remember']`).
 
 `App.jsx` drives the auth flow via `fb.onAuthChange`, fetching the signed-in user's own `factoryos_users` profile doc before rendering `Dashboard`. If a Firebase Auth session is valid but the profile doc is missing (an admin removed the user), `App.jsx` signs them out immediately with an explanatory message — that's the intended way "remove user" revokes access, see the caveat below.
 
@@ -74,6 +74,8 @@ src/
 ```
 
 `Dashboard.jsx` is the one file where nearly everything converges — any change to machine/shift/casting-type state, or to which modal is open, touches this file. When adding a new modal or dashboard panel, follow the existing pattern: state and `fb.set` calls live in `Dashboard.jsx`, the panel itself is a prop-driven component with no direct Firestore access.
+
+**Global UX helpers** (both use the same imperative register pattern — a module-level `showFn` set by a host component that App mounts once): `confirmDialog(msg)` (`src/confirmDialog.js` + `ConfirmDialog.jsx`, promise-based confirm) and `toast(msg)` (`src/toast.js` + `ToastHost.jsx`, fire-and-forget ~2.6s save confirmations, stacked max 3, bottom-center). Toasts are for actions whose modal closes silently (shift complete, log progress, breakdown, repair, decisions, inspections — success paths only; the assembly BOM hard-block deliberately does NOT toast since its modal stays open showing shortages). Modals with their own inline "saved" messages don't also toast. App.jsx also renders a fixed-bottom `.offline-banner` driven by `navigator.onLine` + window online/offline events, with a "Back online" toast on reconnect — Firestore queues writes in memory while offline and syncs on reconnect as long as the tab stays open.
 
 ## Navigation — views and the grouped topbar
 

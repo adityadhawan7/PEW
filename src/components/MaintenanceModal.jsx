@@ -105,7 +105,7 @@ export default function MaintenanceModal({machines,schedules,writeSchedules,log,
                       {s.notes&&<div className="pj-meta">{s.notes}</div>}
                     </div>
                     <div style={{display:'flex',gap:4,flexShrink:0}}>
-                      <button className="small-btn" style={{color:'var(--accent3)',borderColor:'#37c97840'}} onClick={()=>{setDoneForm({scheduleId:s.id,date:todayStr(),cost:'',note:''});setMsg('');}}>✓ Done</button>
+                      <button className="small-btn" style={{color:'var(--accent3)',borderColor:'color-mix(in srgb, var(--accent3) 25%, transparent)'}} onClick={()=>{setDoneForm({scheduleId:s.id,date:todayStr(),cost:'',note:''});setMsg('');}}>✓ Done</button>
                       <button className="small-btn" onClick={()=>{setSchedForm({editingId:s.id,machineId:s.machineId,title:s.title,intervalDays:String(s.intervalDays),lastDoneDate:s.lastDoneDate,notes:s.notes||''});setMsg('');}}>Edit</button>
                       <button className="small-btn danger" onClick={()=>removeSchedule(s)}>Delete</button>
                     </div>
@@ -119,7 +119,7 @@ export default function MaintenanceModal({machines,schedules,writeSchedules,log,
                       </div>
                       <div className="field"><label>Note (optional)</label><input className="mi" value={doneForm.note} onChange={e=>setDoneForm({...doneForm,note:e.target.value})} placeholder="e.g. replaced coolant pump seal"/></div>
                       {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
-                      <div className="mi-row"><button className="add-btn" style={{background:'var(--accent3)',color:'#000'}} onClick={submitDone}>✓ MARK DONE</button><button className="can-btn" onClick={()=>setDoneForm(null)}>Cancel</button></div>
+                      <div className="mi-row"><button className="add-btn" style={{background:'var(--accent3)',color:'var(--on-accent)'}} onClick={submitDone}>✓ MARK DONE</button><button className="can-btn" onClick={()=>setDoneForm(null)}>Cancel</button></div>
                     </div>
                   )}
                 </div>

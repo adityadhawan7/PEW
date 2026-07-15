@@ -95,7 +95,7 @@ export default function InspectionLogModal({inspectionLog,machines,onClose}) {
           ))}
         </div>
       )}
-      <button className="add-btn" style={{marginTop:'1rem',background:'var(--accent3)',color:'#000'}} onClick={printReport}>🖨 PRINT INSPECTION REGISTER</button>
+      <button className="add-btn" style={{marginTop:'1rem',background:'var(--accent3)',color:'var(--on-accent)'}} onClick={printReport}>🖨 PRINT INSPECTION REGISTER</button>
     </Modal>
   );
 }

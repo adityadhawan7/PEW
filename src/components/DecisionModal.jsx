@@ -17,7 +17,7 @@ export default function DecisionModal({alertData,decision,onSubmit,onClose}) {
         <textarea className="mi" rows={4} style={{resize:'vertical',lineHeight:1.6}} placeholder={isApprove?'e.g. Material shortage confirmed valid — no penalty, target adjusted next shift.':'e.g. Counselled operator, reviewed process, extra training scheduled.'} value={note} onChange={e=>setNote(e.target.value)}/>
       </div>
       <div className="mi-row" style={{marginTop:'.5rem'}}>
-        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'#000':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'DISAPPROVE →'}</button>
+        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'var(--on-accent)':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'DISAPPROVE →'}</button>
         <button className="can-btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>

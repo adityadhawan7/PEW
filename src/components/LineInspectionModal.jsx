@@ -48,8 +48,8 @@ export default function LineInspectionModal({machine,mode='setting',onSubmit,onC
       </table>
       <div className="mi-row" style={{marginTop:'.5rem'}}>
         {isSetting
-          ?<button className="add-btn" style={{background:'var(--warn)',color:'#000'}} onClick={()=>onSubmit(rows)}>APPROVE SETTING →</button>
-          :<button className="add-btn" style={{background:'var(--accent)',color:'#000'}} onClick={()=>onSubmit(rows)}>SAVE INSPECTION →</button>}
+          ?<button className="add-btn" style={{background:'var(--warn)',color:'var(--on-accent)'}} onClick={()=>onSubmit(rows)}>APPROVE SETTING →</button>
+          :<button className="add-btn" style={{background:'var(--accent)',color:'var(--on-accent)'}} onClick={()=>onSubmit(rows)}>SAVE INSPECTION →</button>}
         <button className="can-btn" onClick={onClose}>Cancel</button>
       </div>
       {filledCount===0&&<div style={{fontSize:10,color:'var(--text3)',marginTop:8,fontFamily:'var(--mono)'}}>Tip: fill in at least the specs you've checked — blank rows are fine if not all are inspected.</div>}

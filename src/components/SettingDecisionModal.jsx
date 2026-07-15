@@ -31,7 +31,7 @@ export default function SettingDecisionModal({alertData,decision,onSubmit,onClos
         <textarea className="mi" rows={3} style={{resize:'vertical',lineHeight:1.6}} placeholder={isApprove?'e.g. Sizes verified within tolerance, cleared to run.':'e.g. 2nd piece out of tolerance on row 3, redo setup and re-measure.'} value={note} onChange={e=>setNote(e.target.value)}/>
       </div>
       <div className="mi-row" style={{marginTop:'.5rem'}}>
-        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'#000':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'REJECT →'}</button>
+        <button className="add-btn" style={{background:isApprove?'var(--accent3)':'var(--danger)',color:isApprove?'var(--on-accent)':'#fff',opacity:note.trim()?1:0.5}} onClick={()=>{if(note.trim())onSubmit(note.trim());}}>{isApprove?'APPROVE →':'REJECT →'}</button>
         <button className="can-btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>

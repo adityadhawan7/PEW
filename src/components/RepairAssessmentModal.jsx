@@ -15,7 +15,7 @@ export default function RepairAssessmentModal({machine,breakdownReason,onSubmit,
         <textarea className="mi" rows={4} style={{resize:'vertical',lineHeight:1.6}} placeholder="e.g. Spindle bearing worn out, replaced and tested. Cleared for production." value={assessment} onChange={e=>setAssessment(e.target.value)}/>
       </div>
       <div className="mi-row" style={{marginTop:'.5rem'}}>
-        <button className="add-btn" style={{background:'var(--accent3)',color:'#000',opacity:assessment.trim()?1:0.5}} onClick={()=>{if(assessment.trim())onSubmit(assessment.trim());}}>MARK REPAIRED →</button>
+        <button className="add-btn" style={{background:'var(--accent3)',color:'var(--on-accent)',opacity:assessment.trim()?1:0.5}} onClick={()=>{if(assessment.trim())onSubmit(assessment.trim());}}>MARK REPAIRED →</button>
         <button className="can-btn" onClick={onClose}>Cancel</button>
       </div>
     </Modal>

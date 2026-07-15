@@ -172,7 +172,7 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
             Grand total (net payable): <b>₹{Math.round(grandNet*100)/100}</b> across {rows.length} operator{rows.length!==1?'s':''}, {days.length} day{days.length!==1?'s':''}
             {anyPending&&<span style={{color:'var(--warn)'}}> · includes shifts pending review at proportional pay</span>}
           </div>
-          <button className="add-btn" style={{background:'var(--accent3)',color:'#000'}} onClick={toCSV}>↓ DOWNLOAD WAGE REGISTER (CSV)</button>
+          <button className="add-btn" style={{background:'var(--accent3)',color:'var(--on-accent)'}} onClick={toCSV}>↓ DOWNLOAD WAGE REGISTER (CSV)</button>
         </>
       )}
 

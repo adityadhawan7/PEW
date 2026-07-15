@@ -1,26 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { fb } from '../../firebase.js';
 import { toast } from '../../toast.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
 import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary } from '../../utils.js';
 
-import UserModal from '../UserModal.jsx';
-import MachinesModal from '../MachinesModal.jsx';
-import OrdersView from '../OrdersView.jsx';
-import MaintenanceModal from '../MaintenanceModal.jsx';
-import InspectionLogModal from '../InspectionLogModal.jsx';
-import PurchasedComponentsModal from '../PurchasedComponentsModal.jsx';
-import AssemblyModelsModal from '../AssemblyModelsModal.jsx';
-import AnalyticsView from './AnalyticsView.jsx';
 import OperatorHome from './OperatorHome.jsx';
-import CastingTypesModal from '../CastingTypesModal.jsx';
 import AssignModal from '../AssignModal.jsx';
-import OnlineModal from '../OnlineModal.jsx';
-import DownloadModal from '../DownloadModal.jsx';
-import BreakdownHistoryModal from '../BreakdownHistoryModal.jsx';
-import StockView from '../StockView.jsx';
-import AttendanceModal from '../AttendanceModal.jsx';
-import WageRegisterView from '../WageRegisterView.jsx';
 import ShiftCompleteModal from '../ShiftCompleteModal.jsx';
 import LogProgressModal from '../LogProgressModal.jsx';
 import BreakdownModal from '../BreakdownModal.jsx';
@@ -39,6 +24,26 @@ import ShiftOverview from './ShiftOverview.jsx';
 import MachineDetailPanel from './MachineDetailPanel.jsx';
 import AlertsPanel from './AlertsPanel.jsx';
 import AttentionStrip from './AttentionStrip.jsx';
+
+import { lazyWithReload } from '../../lazyWithReload.js';
+// Staff-only screens are code-split — operators' phones never download them. Hot-path
+// operator/supervisor modals (assign, log progress, shift complete, breakdown, decisions,
+// setting approval) stay eager inside the Dashboard chunk so they open instantly.
+const UserModal=lazyWithReload(()=>import('../UserModal.jsx'));
+const MachinesModal=lazyWithReload(()=>import('../MachinesModal.jsx'));
+const OrdersView=lazyWithReload(()=>import('../OrdersView.jsx'));
+const MaintenanceModal=lazyWithReload(()=>import('../MaintenanceModal.jsx'));
+const InspectionLogModal=lazyWithReload(()=>import('../InspectionLogModal.jsx'));
+const PurchasedComponentsModal=lazyWithReload(()=>import('../PurchasedComponentsModal.jsx'));
+const AssemblyModelsModal=lazyWithReload(()=>import('../AssemblyModelsModal.jsx'));
+const AnalyticsView=lazyWithReload(()=>import('./AnalyticsView.jsx'));
+const CastingTypesModal=lazyWithReload(()=>import('../CastingTypesModal.jsx'));
+const OnlineModal=lazyWithReload(()=>import('../OnlineModal.jsx'));
+const DownloadModal=lazyWithReload(()=>import('../DownloadModal.jsx'));
+const BreakdownHistoryModal=lazyWithReload(()=>import('../BreakdownHistoryModal.jsx'));
+const StockView=lazyWithReload(()=>import('../StockView.jsx'));
+const AttendanceModal=lazyWithReload(()=>import('../AttendanceModal.jsx'));
+const WageRegisterView=lazyWithReload(()=>import('../WageRegisterView.jsx'));
 
 export default function Dashboard({currentUser,onLogout}) {
   const [machines,setMachines]=useState(initMachines);
@@ -401,6 +406,9 @@ export default function Dashboard({currentUser,onLogout}) {
 
   return (
     <div className="dashboard">
+      {/* Lazy modals suspend on first open while their chunk fetches — null fallback means a
+          brief instant of nothing, then the modal pops; eager hot-path modals never suspend. */}
+      <Suspense fallback={null}>
       {showUser&&<UserModal currentUser={currentUser} onClose={()=>setShowUser(false)}/>}
       {showMachines&&<MachinesModal machines={machines} setMachines={setMachines} onClose={()=>setShowMachines(false)}/>}
       {showProd&&<CastingTypesModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} onClose={()=>setShowProd(false)}/>}
@@ -420,6 +428,7 @@ export default function Dashboard({currentUser,onLogout}) {
       {repairData&&<RepairAssessmentModal machine={repairData.machine} breakdownReason={(alerts.find(a=>a.data&&a.data.category==='breakdown'&&a.data.machine===repairData.machine.name)||{}).data?.reason} onSubmit={handleRepairSubmit} onClose={()=>setRepairData(null)}/>}
       {decisionData&&(()=>{const a=alerts.find(x=>x.id===decisionData.alertId); return a&&a.data?<DecisionModal alertData={a.data} decision={decisionData.decision} onSubmit={handleDecisionSubmit} onClose={()=>setDecisionData(null)}/>:null;})()}
       {settingDecisionData&&(()=>{const a=alerts.find(x=>x.id===settingDecisionData.alertId); return a&&a.data?<SettingDecisionModal alertData={a.data} decision={settingDecisionData.decision} onSubmit={handleSettingDecision} onClose={()=>setSettingDecisionData(null)}/>:null;})()}
+      </Suspense>
 
       <Topbar
         viewShift={viewShift} setViewShift={setViewShift} clock={clock} isAdmin={isAdmin}
@@ -436,6 +445,9 @@ export default function Dashboard({currentUser,onLogout}) {
 
       {view!=='myshift'&&<ShiftBanner viewShift={viewShift} cfg={cfg}/>}
 
+      {/* Lazy full-page views show a brief loading note while their chunk fetches; the eager
+          floor/myshift branches never suspend. */}
+      <Suspense fallback={<div className="empty" style={{padding:'2rem'}}>Loading…</div>}>
       {safeView==='analytics'?(
         <AnalyticsView wageLog={wageLog} stockLog={stockLog} alerts={alerts} maintLog={maintLog} machines={machines} castingTypes={castingTypes}/>
       ):safeView==='stock'?(
@@ -501,6 +513,7 @@ export default function Dashboard({currentUser,onLogout}) {
         </div>
       </div>
       )}
+      </Suspense>
     </div>
   );
 }

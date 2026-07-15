@@ -38,10 +38,10 @@ export default function App() {
     return ()=>clearTimeout(t);
   },[loading]);
 
-  const handleLogin=async(username,password,shift)=>{
+  const handleLogin=async(username,password,shift,remember)=>{
     pendingShiftRef.current=shift;
     try{
-      await fb.signIn(username,password);
+      await fb.signIn(username,password,remember);
       setRevokedMsg('');
     }catch(e){
       pendingShiftRef.current=null;

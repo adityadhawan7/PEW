@@ -1,7 +1,7 @@
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import {
-  getAuth, setPersistence, browserSessionPersistence,
+  getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
 } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -20,8 +20,9 @@ const db = getFirestore(app);
 const COL = 'factoryos';
 
 const auth = getAuth(app);
-// Session-only persistence: a login must not survive a full browser restart, since shared
-// shop-floor terminals get handed off between operators across shift changes.
+// Default persistence is session-only: a login must not survive a full browser restart, since
+// shared shop-floor terminals get handed off between operators across shift changes. Each
+// sign-in can override this via signIn's `remember` flag (operators' personal phones).
 setPersistence(auth, browserSessionPersistence);
 
 const USERS_COL = 'factoryos_users';
@@ -40,7 +41,11 @@ export const fb = {
   },
 
   // ── Auth ──────────────────────────────────────────
-  async signIn(username, password) {
+  async signIn(username, password, remember = false) {
+    // Per-login persistence: shared shop-floor terminals stay session-only (cleared on browser
+    // close); an operator's personal phone can opt into surviving restarts via "Keep me signed
+    // in on this device" on the login screen.
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
     const cred = await signInWithEmailAndPassword(auth, toEmail(username), password);
     return cred.user;
   },

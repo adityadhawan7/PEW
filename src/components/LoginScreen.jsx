@@ -4,6 +4,9 @@ export default function LoginScreen({onLogin,revokedMsg}) {
   const [u,setU]=useState('');
   const [p,setP]=useState('');
   const [shift,setShift]=useState('day');
+  // Remembered per device (localStorage), so an operator's own phone stays checked while a
+  // shared terminal — where nobody should check it — stays unchecked.
+  const [remember,setRemember]=useState(()=>localStorage.getItem('fos_remember')==='1');
   const [err,setErr]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const login=async()=>{
@@ -12,7 +15,8 @@ export default function LoginScreen({onLogin,revokedMsg}) {
     if(!u.trim()||!p) return setErr('Enter your username and password.');
     setSubmitting(true);
     try{
-      await onLogin(u.trim(),p,shift);
+      localStorage.setItem('fos_remember',remember?'1':'0');
+      await onLogin(u.trim(),p,shift,remember);
     }catch(e){
       setErr(e.message||'Invalid username or password.');
     }finally{
@@ -36,6 +40,13 @@ export default function LoginScreen({onLogin,revokedMsg}) {
               <option value="night">CNC/VMC — Night (20:00–07:00)</option>
               <option value="manual">Manual/Labour (09:00–17:00)</option>
             </select>
+          </div>
+          <div className="field" style={{marginBottom:'1rem'}}>
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',textTransform:'none',letterSpacing:0,fontSize:12,color:'var(--text)'}}>
+              <input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)} style={{width:16,height:16,accentColor:'var(--accent)',cursor:'pointer',flexShrink:0}}/>
+              Keep me signed in on this device
+            </label>
+            <div style={{fontSize:11,color:'var(--text3)',marginTop:4,paddingLeft:24}}>Use only on your own phone — not on a shared terminal.</div>
           </div>
           <button className="login-btn" onClick={login} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'SIGNING IN…':'SIGN IN →'}</button>
         </div>

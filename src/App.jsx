@@ -4,13 +4,26 @@ import LoginScreen from './components/LoginScreen.jsx';
 import Dashboard from './components/dashboard/Dashboard.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ToastHost from './components/ToastHost.jsx';
+import { toast } from './toast.js';
 
 export default function App() {
   const [currentUser,setCurrentUser]=useState(null);
   const [loading,setLoading]=useState(true);
   const [timedOut,setTimedOut]=useState(false);
   const [revokedMsg,setRevokedMsg]=useState('');
+  const [online,setOnline]=useState(navigator.onLine);
   const pendingShiftRef=useRef(null);
+
+  // Shop-floor wifi drops constantly — without this, an offline app looks completely normal.
+  // Firestore queues writes in memory while offline and syncs them on reconnect (as long as the
+  // tab stays open), hence the "keep this screen open" wording.
+  useEffect(()=>{
+    const on=()=>{ setOnline(true); toast('✓ Back online — changes synced'); };
+    const off=()=>setOnline(false);
+    window.addEventListener('online',on);
+    window.addEventListener('offline',off);
+    return ()=>{ window.removeEventListener('online',on); window.removeEventListener('offline',off); };
+  },[]);
 
   useEffect(()=>{
     const unsub=fb.onAuthChange(async user=>{
@@ -72,6 +85,7 @@ export default function App() {
       {!currentUser
         ?<LoginScreen onLogin={handleLogin} revokedMsg={revokedMsg}/>
         :<Dashboard currentUser={currentUser} onLogout={handleLogout}/>}
+      {!online&&<div className="offline-banner">⚡ Offline — keep this screen open; changes sync when the connection returns</div>}
       <ConfirmDialog/>
       <ToastHost/>
     </>

@@ -71,6 +71,9 @@ body{background:var(--bg)}
 .error-msg{font-size:12px;color:var(--danger);font-family:var(--font);font-weight:500;margin-bottom:8px}
 .login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
 .login-wrap{display:grid;grid-template-columns:1fr 1fr;border-radius:14px;overflow:hidden;border:1px solid var(--border2);max-width:780px;width:100%}
+/* min-width:0 stops the schedule's long unbreakable machine list from blowing the grid track
+   past narrow phone viewports (grid items default to min-width:auto = min-content). */
+.login-wrap>*{min-width:0}
 @media(max-width:720px){.login-wrap{grid-template-columns:1fr}}
 .login-left{background:var(--bg2);padding:2.5rem}
 .login-right{background:var(--bg3);padding:2.5rem;border-left:1px solid var(--border2)}
@@ -86,7 +89,7 @@ body{background:var(--bg)}
 .sch-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
 .sch-name{font-size:13px;font-weight:500;margin-bottom:2px}
 .sch-time{font-family:var(--mono);font-size:12px;color:var(--text2);margin-bottom:3px}
-.sch-machines{font-size:12px;color:var(--text3);line-height:1.5}
+.sch-machines{font-size:12px;color:var(--text3);line-height:1.5;overflow-wrap:anywhere}
 .schedule-title{font-family:var(--font);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:1rem}
 .dashboard{display:flex;flex-direction:column;min-height:100vh}
 .topbar{background:var(--bg2);border-bottom:1px solid var(--border2);padding:.5rem 1.25rem;min-height:50px;display:flex;align-items:center;flex-shrink:0;gap:1.25rem;position:sticky;top:0;z-index:100}

@@ -231,6 +231,147 @@ export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],pu
   };
 }
 
+// ── Monthly salary sheet ───────────────────────────────────
+// Generates the owner's hand-built Google Sheet payroll format as a CSV whose cells carry LIVE
+// formulas — Google Sheets' importer converts "=IF(...)" strings into real formulas, so the
+// download is his own editable sheet pre-filled from app data, not a dead export.
+
+// The owner's paid-Sundays rule, verbatim from his Google Sheet:
+// =IF(days<20,0,IF(days=20,1,IF(days=21,2,IF(days=22,3,4)))). JS twin kept only for tests and
+// previews — the exported sheet carries the actual formula so he can still tweak days in Sheets.
+export function paidSundays(daysWorked){
+  if(daysWorked<20) return 0;
+  if(daysWorked===20) return 1;
+  if(daysWorked===21) return 2;
+  if(daysWorked===22) return 3;
+  return 4;
+}
+
+export const monthKeyOf = dateStr => (dateStr||'').slice(0,7); // 'YYYY-MM-DD' -> 'YYYY-MM'
+
+// Attendance days in a calendar month: present=1, half=0.5. attendance shape: {[date]:{[username]:status}}.
+export function attendanceDaysInMonth(attendance,username,month){
+  let days=0;
+  for(const [date,byUser] of Object.entries(attendance||{})){
+    if(!date.startsWith(month+'-')) continue;
+    const st=(byUser||{})[username];
+    if(st==='present') days+=1;
+    else if(st==='half') days+=0.5;
+  }
+  return days;
+}
+
+// Month totals from the manual adjustments ledger, per person.
+export function adjustmentTotalsForMonth(adjustments,username,month){
+  const t={food:0,conveyance:0,advance:0};
+  for(const a of adjustments||[]){
+    if(a.username!==username||monthKeyOf(a.date)!==month) continue;
+    if(t[a.type]!==undefined) t[a.type]+=Number(a.amount)||0;
+  }
+  return t;
+}
+
+// Production OT hours the app knows about: per wage_log entry, extra units above target
+// converted to hours via the entry's snapshotted rate. Manually-tracked OT (off-machine work)
+// isn't in the app — the sheet leaves those cells editable.
+export function productionOtHoursForMonth(wageLog,username,month){
+  let hours=0;
+  for(const e of wageLog||[]){
+    if(e.username!==username||monthKeyOf(e.date)!==month) continue;
+    if(!e.ratePerHour||e.ratePerHour<=0) continue;
+    const extra=(e.produced||0)-(e.target||0);
+    if(extra>0) hours+=extra/e.ratePerHour;
+  }
+  return Math.round(hours*100)/100;
+}
+
+// Is last month's salary sheet due? Due from the 5th of each month until the previous calendar
+// month has been generated. Returns the due month key ('YYYY-MM') or null.
+export function salarySheetDue(today,lastGeneratedMonth){
+  const [y,m,d]=today.split('-').map(Number);
+  if(d<5) return null;
+  const prevY=m===1?y-1:y, prevM=m===1?12:m-1;
+  const prevKey=`${prevY}-${String(prevM).padStart(2,'0')}`;
+  if(lastGeneratedMonth&&lastGeneratedMonth>=prevKey) return null;
+  return prevKey;
+}
+
+const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+export const monthLabel = month => { const [y,m]=month.split('-').map(Number); return `${MONTH_NAMES[m-1]} ${y}`; };
+
+const PAY_GROUPS=[['cheque','Cheque'],['cash','Cash'],['thekedar','Thekedar'],['office','Office'],['ungrouped','Ungrouped']];
+
+// CSV cell: quote anything containing commas/quotes/newlines (all formulas do — they contain
+// commas), escaping embedded quotes per RFC 4180. Google Sheets' importer evaluates quoted
+// "=..." cells as formulas.
+const csvCell = v => {
+  const s=v===null||v===undefined?'':String(v);
+  return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+};
+
+// Builds the salary-sheet CSV for one calendar month. Columns (letters used by the formulas):
+// A Name · B (spacer, matches the owner's sheet) · C Daily Wage · D Days Worked · E Holiday ·
+// F Sunday · G Monthly · H Overtime Hours (the hourly RATE — his sheet's naming) ·
+// I Hours Worked · J Conveyance · K Total · L Advance · M Food Voucher · N G Total.
+// Per-group Total rows and a grand TOTAL WAGES row are =SUM formulas over the laid-out rows.
+export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustments=[],month,publicHolidays=0}){
+  const dim=daysInMonth(month+'-01');
+  const rows=[]; // arrays of 14 cells
+  const push=r=>rows.push(r);
+  const blank=()=>new Array(14).fill('');
+
+  push([monthLabel(month),...new Array(13).fill('')]);
+  push(['Name','','Daily Wage','Days Worked','Holiday','Sunday','Monthly','Overtime Hours','Hours Worked','Conveyance','Total','Advance','Food Voucher','G Total']);
+
+  const groupTotalRows=[];
+  for(const [groupKey,groupLabel] of PAY_GROUPS){
+    const members=users.filter(u=>(u.payGroup||'ungrouped')===groupKey);
+    if(!members.length) continue;
+    push([groupLabel,...new Array(13).fill('')]);
+    const firstDataRow=rows.length+1; // 1-indexed row of the first member line
+    for(const u of members){
+      const r=rows.length+1;
+      const isMonthly=u.wageType==='monthly'&&(u.monthlySalary||0)>0;
+      const holidays=(u.payGroup==='office'?1:0)+(Number(publicHolidays)||0);
+      const adj=adjustmentTotalsForMonth(adjustments,u.username,month);
+      const ot=productionOtHoursForMonth(wageLog,u.username,month);
+      push([
+        u.name||u.username,
+        '',
+        isMonthly?`=G${r}/${dim}`:(u.dailyWage||0),
+        attendanceDaysInMonth(attendance,u.username,month),
+        holidays||'',
+        `=IF(D${r}<20,0,IF(D${r}=20,1,IF(D${r}=21,2,IF(D${r}=22,3,4))))`,
+        isMonthly?(u.monthlySalary||0):'',
+        `=C${r}/8`,
+        ot||'',
+        adj.conveyance||'',
+        `=C${r}*(D${r}+E${r}+F${r})+H${r}*I${r}+J${r}`,
+        adj.advance||'',
+        adj.food||'',
+        `=K${r}-L${r}+M${r}`,
+      ]);
+    }
+    const lastDataRow=rows.length;
+    const tr=rows.length+1;
+    groupTotalRows.push(tr);
+    const row=blank();
+    row[0]='Total';
+    row[10]=`=SUM(K${firstDataRow}:K${lastDataRow})`;
+    row[11]=`=SUM(L${firstDataRow}:L${lastDataRow})`;
+    row[12]=`=SUM(M${firstDataRow}:M${lastDataRow})`;
+    row[13]=`=SUM(N${firstDataRow}:N${lastDataRow})`;
+    push(row);
+  }
+
+  const grand=blank();
+  grand[0]='TOTAL WAGES';
+  grand[13]=groupTotalRows.length?'='+groupTotalRows.map(r=>`N${r}`).join('+'):'0';
+  push(grand);
+
+  return rows.map(r=>r.map(csvCell).join(',')).join('\n');
+}
+
 // Records a dispatch of `qty` pieces of one casting type against an order: increments that
 // line's dispatched count (allowed to exceed qty — record what physically shipped) and
 // auto-completes the order once EVERY line has dispatched >= qty. Pure — returns a new array;

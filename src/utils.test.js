@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1152,5 +1152,136 @@ describe('attentionSummary', () => {
     expect(attentionSummary({ orders, today: '2026-07-14' }).orders.dueSoon).toBe(1);
     expect(attentionSummary({ orders, today: '2026-06-01' }).orders.total).toBe(0);
     expect(attentionSummary({ orders, today: '2026-07-20' }).orders.overdue).toBe(1);
+  });
+});
+
+describe('salary sheet helpers', () => {
+  it('paidSundays mirrors the owner\'s IF ladder exactly', () => {
+    expect(paidSundays(19)).toBe(0);
+    expect(paidSundays(19.5)).toBe(0);
+    expect(paidSundays(20)).toBe(1);
+    expect(paidSundays(21)).toBe(2);
+    expect(paidSundays(22)).toBe(3);
+    expect(paidSundays(23)).toBe(4);
+    expect(paidSundays(26)).toBe(4);
+    expect(paidSundays(21.5)).toBe(4); // falls through the equality ladder, like the Sheets formula
+  });
+
+  it('attendanceDaysInMonth counts present=1, half=0.5, only in the month', () => {
+    const attendance = {
+      '2026-06-01': { ravi: 'present', suresh: 'absent' },
+      '2026-06-02': { ravi: 'half' },
+      '2026-06-30': { ravi: 'present' },
+      '2026-07-01': { ravi: 'present' }, // outside month
+    };
+    expect(attendanceDaysInMonth(attendance, 'ravi', '2026-06')).toBe(2.5);
+    expect(attendanceDaysInMonth(attendance, 'suresh', '2026-06')).toBe(0);
+    expect(attendanceDaysInMonth({}, 'ravi', '2026-06')).toBe(0);
+  });
+
+  it('adjustmentTotalsForMonth sums food/conveyance/advance for the person and month only', () => {
+    const adjustments = [
+      { username: 'ravi', date: '2026-06-03', type: 'conveyance', amount: 1200 },
+      { username: 'ravi', date: '2026-06-20', type: 'conveyance', amount: 1300 },
+      { username: 'ravi', date: '2026-06-10', type: 'advance', amount: 5000 },
+      { username: 'ravi', date: '2026-06-12', type: 'food', amount: 250 },
+      { username: 'ravi', date: '2026-05-30', type: 'advance', amount: 999 },   // wrong month
+      { username: 'suresh', date: '2026-06-10', type: 'advance', amount: 777 }, // wrong person
+    ];
+    expect(adjustmentTotalsForMonth(adjustments, 'ravi', '2026-06')).toEqual({ food: 250, conveyance: 2500, advance: 5000 });
+  });
+
+  it('productionOtHoursForMonth converts extra units to hours via the snapshotted rate', () => {
+    const wageLog = [
+      { username: 'ravi', date: '2026-06-05', produced: 120, target: 100, ratePerHour: 10 }, // +2h
+      { username: 'ravi', date: '2026-06-06', produced: 90, target: 100, ratePerHour: 10 },  // below target: 0
+      { username: 'ravi', date: '2026-06-07', produced: 110, target: 100, ratePerHour: 0 },  // no rate: skipped
+      { username: 'ravi', date: '2026-05-05', produced: 200, target: 100, ratePerHour: 10 }, // wrong month
+      { username: 'suresh', date: '2026-06-05', produced: 200, target: 100, ratePerHour: 10 },
+    ];
+    expect(productionOtHoursForMonth(wageLog, 'ravi', '2026-06')).toBe(2);
+  });
+
+  it('salarySheetDue: due from the 5th until the previous month is generated', () => {
+    expect(salarySheetDue('2026-07-04', null)).toBe(null);           // too early
+    expect(salarySheetDue('2026-07-05', null)).toBe('2026-06');
+    expect(salarySheetDue('2026-07-20', '2026-05')).toBe('2026-06'); // stale
+    expect(salarySheetDue('2026-07-20', '2026-06')).toBe(null);      // generated
+    expect(salarySheetDue('2026-01-10', null)).toBe('2025-12');      // year rollover
+  });
+
+  it('monthLabel renders the human month', () => {
+    expect(monthLabel('2026-06')).toBe('June 2026');
+  });
+});
+
+describe('buildSalarySheetCsv', () => {
+  const users = [
+    { username: 'mukesh', name: 'Mukesh Sharma', payGroup: 'cheque', wageType: 'daily', dailyWage: 887 },
+    { username: 'dinesh', name: 'Dinesh', payGroup: 'cash', wageType: 'monthly', monthlySalary: 19100 },
+    { username: 'akash', name: 'Akash', payGroup: 'office', wageType: 'monthly', monthlySalary: 50000 },
+    { username: 'newguy', name: 'New Guy', wageType: 'daily', dailyWage: 400 }, // no payGroup -> Ungrouped
+  ];
+  const attendance = { '2026-06-01': { mukesh: 'present', dinesh: 'present', akash: 'present', newguy: 'half' } };
+  const adjustments = [
+    { username: 'mukesh', date: '2026-06-02', type: 'conveyance', amount: 6910 },
+    { username: 'mukesh', date: '2026-06-15', type: 'advance', amount: 3000 },
+  ];
+  const wageLog = [{ username: 'mukesh', date: '2026-06-09', produced: 150, target: 100, ratePerHour: 25 }];
+  const csv = buildSalarySheetCsv({ users, attendance, wageLog, adjustments, month: '2026-06', publicHolidays: 0 });
+  const lines = csv.split('\n');
+
+  // Layout: 1 title, 2 header, 3 "Cheque", 4 mukesh, 5 Total, 6 "Cash", 7 dinesh, 8 Total,
+  // 9 "Office", 10 akash, 11 Total, 12 "Ungrouped", 13 newguy, 14 Total, 15 TOTAL WAGES
+  it('lays out groups in fixed order with headers, and skips empty groups', () => {
+    expect(lines[0].startsWith('June 2026')).toBe(true);
+    expect(lines[2].startsWith('Cheque')).toBe(true);
+    expect(lines[5].startsWith('Cash')).toBe(true);
+    expect(lines[8].startsWith('Office')).toBe(true);
+    expect(lines[11].startsWith('Ungrouped')).toBe(true);
+    expect(csv.includes('Thekedar')).toBe(false); // empty group omitted
+  });
+
+  it('worker rows carry the owner\'s formulas with the right row references', () => {
+    const mukesh = lines[3];
+    expect(mukesh).toContain('Mukesh Sharma');
+    expect(mukesh).toContain('887');
+    expect(mukesh).toContain('"=IF(D4<20,0,IF(D4=20,1,IF(D4=21,2,IF(D4=22,3,4))))"');
+    expect(mukesh).toContain('=C4/8');
+    expect(mukesh).toContain('=C4*(D4+E4+F4)+H4*I4+J4'); // no comma in this formula -> unquoted cell
+    expect(mukesh).toContain('6910');  // conveyance prefilled
+    expect(mukesh).toContain('3000');  // advance prefilled
+    expect(mukesh).toContain('2');     // 50 extra units / 25 rate = 2 OT hours
+  });
+
+  it('monthly workers get daily wage as monthly/daysInMonth formula', () => {
+    const dinesh = lines[6];
+    expect(dinesh).toContain('=G7/30'); // June has 30 days
+    expect(dinesh).toContain('19100');
+  });
+
+  it('office staff get the base paid holiday; public holidays add for everyone', () => {
+    const akash = lines[9];
+    const cells = akash.split(',');
+    expect(cells[4]).toBe('1'); // E column: office base holiday
+    const csv2 = buildSalarySheetCsv({ users, attendance, wageLog, adjustments, month: '2026-06', publicHolidays: 1 });
+    const lines2 = csv2.split('\n');
+    expect(lines2[3].split(',')[4]).toBe('1'); // mukesh: 0+1
+    expect(lines2[9].split(',')[4]).toBe('2'); // akash: 1+1
+  });
+
+  it('group totals SUM the right row ranges and TOTAL WAGES adds the group totals', () => {
+    expect(lines[4]).toContain('=SUM(K4:K4)');
+    expect(lines[4]).toContain('=SUM(N4:N4)');
+    expect(lines[7]).toContain('=SUM(N7:N7)');
+    expect(lines[14].startsWith('TOTAL WAGES')).toBe(true);
+    expect(lines[14]).toContain('=N5+N8+N11+N14');
+  });
+
+  it('quotes every cell containing commas so formulas survive CSV parsing', () => {
+    // The Sunday formula contains commas — it must arrive as ONE quoted cell.
+    const mukeshCells = lines[3].match(/("([^"]|"")*"|[^,]*)(,|$)/g);
+    expect(lines[3]).toContain('"=IF(D4<20,0,IF(D4=20,1,IF(D4=21,2,IF(D4=22,3,4))))"');
+    expect(mukeshCells.length).toBeGreaterThan(0);
   });
 });

@@ -55,7 +55,8 @@ exports.resetUserPassword = onCall(async (request) => {
 // `factoryos_users` profile list, copied into `factoryos_backups` (one doc per source doc,
 // id `${date}~${key}`, so each backup doc stays within the same 1MB limit as its source).
 // Clients can't touch the backups collection (firestore.rules default-deny; the Admin SDK
-// here bypasses rules). Retention: 14 dailies, older snapshots pruned on each run.
+// here bypasses rules). Retention: 14 dailies for recent-mistake recovery, plus every
+// 1st-of-the-month snapshot kept FOREVER as a permanent monthly archive (a few MB per month).
 // Restore = copy a backup doc's `value` back over factoryos/{key} in the Firebase console.
 const BACKUP_RETENTION_DAYS = 14;
 exports.dailyBackup = onSchedule({ schedule: '30 3 * * *', timeZone: 'Asia/Kolkata' }, async () => {
@@ -82,14 +83,17 @@ exports.dailyBackup = onSchedule({ schedule: '30 3 * * *', timeZone: 'Asia/Kolka
   });
   ops++;
 
-  // Prune snapshots past retention.
+  // Prune dailies past retention — but 1st-of-the-month snapshots are kept forever as the
+  // permanent monthly archive.
   const cutoff = new Date(now.getTime() - BACKUP_RETENTION_DAYS * 86400000);
   const cutoffDate = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
   const stale = await db.collection('factoryos_backups').where('date', '<', cutoffDate).get();
+  let pruned = 0;
   for (const doc of stale.docs) {
+    if (doc.data().date.endsWith('-01')) continue; // monthly archive — never pruned
     batch.delete(doc.ref);
-    ops++; await commitIfFull();
+    pruned++; ops++; await commitIfFull();
   }
   await batch.commit();
-  console.log(`Backup ${date}: ${flatDocs.size} flat docs + ${users.size} users saved, ${stale.size} stale docs pruned.`);
+  console.log(`Backup ${date}: ${flatDocs.size} flat docs + ${users.size} users saved, ${pruned} stale docs pruned.`);
 });

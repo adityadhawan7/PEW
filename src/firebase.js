@@ -104,4 +104,12 @@ export const fb = {
     await deleteUserAccount({ uid });
     return true;
   },
+  // Admin only, enforced inside the resetUserPassword Cloud Function (same admin-check
+  // pattern as deleteUserAccount). The in-app fix for forgotten passwords.
+  async resetUserPassword(uid, newPassword) {
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const resetFn = httpsCallable(getFunctions(app), 'resetUserPassword');
+    await resetFn({ uid, newPassword });
+    return true;
+  },
 };

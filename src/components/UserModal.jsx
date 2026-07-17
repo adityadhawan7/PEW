@@ -30,7 +30,7 @@ export default function UserModal({currentUser,onClose}) {
     const monthlySalary=form.monthlySalary===''?0:Number(form.monthlySalary);
     if(isNaN(monthlySalary)||monthlySalary<0) return setMsg('Monthly salary must be a number 0 or greater.');
     if(editing==='new'&&!form.password) return setMsg('Password required.');
-    if(editing==='new'&&form.password.length<6) return setMsg('Password must be at least 6 characters (Firebase requirement).');
+    if(form.password&&form.password.length<6) return setMsg('Password must be at least 6 characters (Firebase requirement).');
     setMsg('Saving…');
     setSubmitting(true);
     try{
@@ -39,6 +39,9 @@ export default function UserModal({currentUser,onClose}) {
       } else {
         const target=users.find(u=>u.uid===editing);
         await fb.setUserProfile(editing,{username:target.username,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType});
+        // A filled password field on an existing user means "reset their password" —
+        // goes through the admin-gated resetUserPassword Cloud Function.
+        if(form.password) await fb.resetUserPassword(editing,form.password);
       }
       setMsg('Saved.'); setEditing(null);
       await reload();
@@ -88,7 +91,9 @@ export default function UserModal({currentUser,onClose}) {
         <>
           <div className="field"><label>Username</label><input className="mi" value={form.username} disabled={editing!=='new'} onChange={e=>setForm({...form,username:e.target.value})} placeholder="e.g. operator2"/></div>
           <div className="field"><label>Full name</label><input className="mi" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Suresh Patel"/></div>
-          {editing==='new'&&<div className="field"><label>Password</label><input className="mi" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div>}
+          {editing==='new'
+            ?<div className="field"><label>Password</label><input className="mi" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/></div>
+            :<div className="field"><label>New password (leave blank to keep current)</label><input className="mi" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})} placeholder="Set only to reset a forgotten password"/></div>}
           <div className="field"><label>Role</label>
             <div className="role-chips">{['admin','supervisor','operator'].map(r=><div key={r} className={`role-chip${form.role===r?' active':''}`} onClick={()=>setForm({...form,role:r})}>{r.charAt(0).toUpperCase()+r.slice(1)}</div>)}</div>
           </div>
@@ -110,7 +115,6 @@ export default function UserModal({currentUser,onClose}) {
           {form.role==='operator'&&form.wageType==='monthly'
             ?<div className="field"><label>Monthly salary (₹) — prorated by attendance across the pay period</label><input className="mi" type="number" min="0" value={form.monthlySalary} onChange={e=>setForm({...form,monthlySalary:e.target.value})} placeholder="e.g. 15000"/></div>
             :form.role==='operator'&&<div className="field"><label>Daily wage (₹) — used for attendance &amp; overtime pay</label><input className="mi" type="number" min="0" value={form.dailyWage} onChange={e=>setForm({...form,dailyWage:e.target.value})} placeholder="e.g. 500"/></div>}
-          {editing!=='new'&&<p className="modal-note">Password changes for existing users aren't available here — see the admin notes on resetting a forgotten password.</p>}
           {msg&&<div className="save-msg" style={{color:'var(--danger)'}}>{msg}</div>}
           <div className="mi-row" style={{marginTop:'.5rem'}}><button className="add-btn" onClick={save} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'SAVING…':'SAVE'}</button><button className="can-btn" onClick={()=>setEditing(null)} disabled={submitting}>Cancel</button></div>
         </>

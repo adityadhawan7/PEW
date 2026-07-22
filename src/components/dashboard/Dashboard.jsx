@@ -58,6 +58,8 @@ export default function Dashboard({currentUser,onLogout}) {
   const [attendance,setAttendance]=useState({});
   const [wageLog,setWageLog]=useState([]);
   const [adjustments,setAdjustments]=useState([]);
+  const [salarySheets,setSalarySheets]=useState({});
+  const [wagesInitialTab,setWagesInitialTab]=useState(null);
   const [orders,setOrders]=useState([]);
   const [maintSchedules,setMaintSchedules]=useState([]);
   const [maintLog,setMaintLog]=useState([]);
@@ -127,7 +129,11 @@ export default function Dashboard({currentUser,onLogout}) {
     const unAM=fb.sub('assembly_models',v=>{if(v)setAssemblyModels(v);});
     const unPC=fb.sub('purchased_components',v=>{if(v)setPurchasedComponents(v);});
     const unS=fb.sub('sessions',v=>{if(v)setSessions(v);});
-    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unAM();unPC();unS();};
+    // salary_sheets is a tiny standalone doc ({lastGeneratedMonth}) — loaded outside the main
+    // Promise.all so the big destructuring tuple stays put.
+    fb.get('salary_sheets').then(v=>{if(v)setSalarySheets(v);});
+    const unSS=fb.sub('salary_sheets',v=>{if(v)setSalarySheets(v);});
+    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unAM();unPC();unS();unSS();};
   },[]);
 
   useEffect(()=>{
@@ -158,6 +164,10 @@ export default function Dashboard({currentUser,onLogout}) {
   const writeAlerts=newAlerts=>{ setAlerts(newAlerts); fb.set('alerts',newAlerts); };
   const writeWageLog=list=>{ setWageLog(list); fb.set('wage_log',list); };
   const writeAdjustments=list=>{ setAdjustments(list); fb.set('adjustments',list); };
+  const writeSalarySheetLog=data=>{ setSalarySheets(data); fb.set('salary_sheets',data); };
+  // The salary-sheet chip lands on the Wages "Monthly sheet" tab; clear that intent once the
+  // user leaves Wages, so opening it later from the topbar starts on the Register tab.
+  useEffect(()=>{ if(view!=='wages'&&wagesInitialTab) setWagesInitialTab(null); },[view,wagesInitialTab]);
   const writeOrders=list=>{ setOrders(list); fb.set('orders',list); };
   const writeMaintSchedules=list=>{ setMaintSchedules(list); fb.set('maintenance_schedules',list); };
   const writeMaintLog=list=>{ setMaintLog(list); fb.set('maintenance_log',list); };
@@ -389,7 +399,7 @@ export default function Dashboard({currentUser,onLogout}) {
   };
   const cfg=SHIFT_CFG[viewShift];
   // One source for the attention strip AND the Topbar section badges — they can never disagree.
-  const attention=attentionSummary({orders,maintSchedules,castingTypes,purchasedComponents,alerts,today:todayStr()});
+  const attention=attentionSummary({orders,maintSchedules,castingTypes,purchasedComponents,alerts,salarySheets,today:todayStr()});
   const ordersAttention=attention.orders.total;
   const maintAttention=attention.maint.total;
   // Defensive: a view a role isn't entitled to falls back to that role's home. In practice
@@ -460,7 +470,7 @@ export default function Dashboard({currentUser,onLogout}) {
       ):safeView==='orders'?(
         <OrdersView orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='wages'?(
-        <WageRegisterView attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} currentUser={currentUser} onBack={()=>setView('floor')}/>
+        <WageRegisterView attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} writeSalarySheetLog={writeSalarySheetLog} initialTab={wagesInitialTab} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='myshift'?(
       <div className="main-layout">
         <div className="content-area">
@@ -480,7 +490,9 @@ export default function Dashboard({currentUser,onLogout}) {
       ):(
       <div className="main-layout">
         <div className="content-area">
-          {isAdmin&&<AttentionStrip attention={attention} setView={setView} setShowMaintenance={setShowMaintenance}/>}
+          {isAdmin&&<AttentionStrip attention={attention} setView={setView} setShowMaintenance={setShowMaintenance}
+            salaryDueMonth={currentUser.role==='admin'?attention.salarySheetDueMonth:null}
+            onOpenSalarySheet={()=>{setWagesInitialTab('sheet');setView('wages');}}/>}
 
           <AssignmentBanner user={currentUser} machines={machines} castingTypes={castingTypes} assemblyModels={assemblyModels} viewShift={viewShift}/>
 

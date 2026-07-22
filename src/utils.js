@@ -208,7 +208,7 @@ export function maintenanceDueState(schedule, today, leadDays=7){
 // StockModal/PurchasedComponentsModal (inclusive <=, no coercion). pendingReviews counts the
 // only two producers of data.status==='pending': shortfall reviews (handleShiftComplete) and
 // setting approvals (handleSubmitSettingInspection).
-export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],purchasedComponents=[],alerts=[],today}){
+export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],purchasedComponents=[],alerts=[],salarySheets={},today}){
   const split=(list,stateFn)=>{
     let overdue=0,dueSoon=0;
     for(const x of list){
@@ -228,6 +228,7 @@ export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],pu
     maint:split(maintSchedules,maintenanceDueState),
     lowStock:{count:lowStockItems.length,items:lowStockItems},
     pendingReviews,
+    salarySheetDueMonth:salarySheetDue(today,salarySheets.lastGeneratedMonth),
   };
 }
 

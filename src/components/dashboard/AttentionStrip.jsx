@@ -2,13 +2,21 @@
 // Staff-only triage row at the top of the floor view: everything that needs a decision today,
 // each chip jumping to the right place. Fed by attentionSummary (utils.js) — the same source
 // as the Topbar section badges, so the two can never disagree. Renders nothing when all clear.
-export default function AttentionStrip({attention, setView, setShowMaintenance}) {
+// salaryDueMonth is passed only when the viewer is an admin (supervisors see the strip but must
+// never touch pay), so gating the chip on it also gates it by role.
+export default function AttentionStrip({attention, setView, setShowMaintenance, salaryDueMonth, onOpenSalarySheet}) {
   const {orders,maint,lowStock,pendingReviews}=attention;
-  if(orders.total+maint.total+lowStock.count+pendingReviews===0) return null;
+  if(orders.total+maint.total+lowStock.count+pendingReviews===0&&!salaryDueMonth) return null;
   const seg=(overdue,dueSoon)=>[overdue?`${overdue} overdue`:'',dueSoon?`${dueSoon} due soon`:''].filter(Boolean).join(' · ');
   const scrollToAlerts=()=>document.getElementById('floor-alerts')?.scrollIntoView({behavior:'smooth',block:'start'});
+  const monthName=salaryDueMonth?new Date(salaryDueMonth+'-01T00:00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'}):'';
   return (
     <div className="attn-strip">
+      {salaryDueMonth&&(
+        <button className="attn-chip warn" onClick={onOpenSalarySheet}>
+          ₹ {monthName} salary sheet ready — download
+        </button>
+      )}
       {orders.total>0&&(
         <button className={`attn-chip ${orders.overdue?'danger':'warn'}`} onClick={()=>setView('orders')}>
           ⚠ Orders: {seg(orders.overdue,orders.dueSoon)}

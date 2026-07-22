@@ -1153,6 +1153,12 @@ describe('attentionSummary', () => {
     expect(attentionSummary({ orders, today: '2026-06-01' }).orders.total).toBe(0);
     expect(attentionSummary({ orders, today: '2026-07-20' }).orders.overdue).toBe(1);
   });
+
+  it('surfaces the salary-sheet due month from the 5th until generated', () => {
+    expect(attentionSummary({ today: '2026-07-04' }).salarySheetDueMonth).toBe(null);
+    expect(attentionSummary({ today: '2026-07-05' }).salarySheetDueMonth).toBe('2026-06');
+    expect(attentionSummary({ today: '2026-07-20', salarySheets: { lastGeneratedMonth: '2026-06' } }).salarySheetDueMonth).toBe(null);
+  });
 });
 
 describe('salary sheet helpers', () => {

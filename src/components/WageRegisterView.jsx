@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PageView from './PageView.jsx';
 import { fb } from '../firebase.js';
-import { todayStr, nowStr, fullTs, computeOperatorDayPay } from '../utils.js';
+import { todayStr, nowStr, fullTs, computeOperatorDayPay, buildSalarySheetCsv, monthLabel } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
 const ADJ_TYPES={
@@ -16,12 +16,17 @@ const ADJ_TYPES={
 // computeOperatorDayPay in utils.js for the pay rules (piece-rate vs daily, shortfall gating).
 // The adjustments ledger (manual food/conveyance allowances and salary advances) is entered
 // on the second tab; the register nets it against the period's pay.
-export default function WageRegisterView({attendance,wageLog,adjustments,writeAdjustments,currentUser,onBack}) {
+export default function WageRegisterView({attendance,wageLog,adjustments,writeAdjustments,writeSalarySheetLog,currentUser,onBack,initialTab}) {
   const [users,setUsers]=useState([]);
   useEffect(()=>{ fb.listUserProfiles().then(setUsers); },[]);
   const [from,setFrom]=useState(todayStr());
   const [to,setTo]=useState(todayStr());
-  const [tab,setTab]=useState('register');
+  const [tab,setTab]=useState(initialTab||'register');
+  // Monthly salary sheet: defaults to the previous calendar month (sheets are generated on
+  // the 5th of the following month).
+  const prevMonth=(()=>{ const n=new Date(); const y=n.getMonth()===0?n.getFullYear()-1:n.getFullYear(); const m=n.getMonth()===0?12:n.getMonth(); return `${y}-${String(m).padStart(2,'0')}`; })();
+  const [sheetMonth,setSheetMonth]=useState(prevMonth);
+  const [publicHolidays,setPublicHolidays]=useState('0');
   const [expanded,setExpanded]=useState(null); // username whose per-shift detail is open
   const [adjForm,setAdjForm]=useState({username:'',date:todayStr(),type:'advance',amount:'',note:''});
   const [adjMsg,setAdjMsg]=useState('');
@@ -113,12 +118,41 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
     el.href=url; el.download=`wage-register-${from}-to-${to}.csv`; el.click(); URL.revokeObjectURL(url);
   };
 
+  const downloadSalarySheet=()=>{
+    const csv=buildSalarySheetCsv({users,attendance,wageLog,adjustments,month:sheetMonth,publicHolidays:Number(publicHolidays)||0});
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const el=document.createElement('a');
+    el.href=url; el.download=`Salary-${monthLabel(sheetMonth).replace(' ','-')}.csv`; el.click(); URL.revokeObjectURL(url);
+    if(writeSalarySheetLog) writeSalarySheetLog({lastGeneratedMonth:sheetMonth});
+  };
+  const ungrouped=users.filter(u=>!u.payGroup);
+
   return (
     <PageView title="Wage register" onBack={onBack}>
       <div className="role-chips" style={{marginBottom:'1rem'}}>
         <div className={`role-chip${tab==='register'?' active':''}`} onClick={()=>setTab('register')}>Register</div>
         <div className={`role-chip${tab==='adjust'?' active':''}`} onClick={()=>setTab('adjust')}>Allowances &amp; advances</div>
+        <div className={`role-chip${tab==='sheet'?' active':''}`} onClick={()=>setTab('sheet')}>Monthly sheet</div>
       </div>
+
+      {tab==='sheet'&&(
+        <>
+          <p className="modal-note">
+            Generates your salary sheet for a whole month — grouped Cheque / Cash / Thekedar / Office with per-group
+            totals, pre-filled from the app: attendance days, wages, machine overtime hours, and conveyance /
+            advances / food from the Allowances tab. The Sunday rule and all totals arrive as <b>live formulas</b>:
+            in Google Sheets use <b>File → Import → Upload</b> and pick this file — then adjust any number
+            (extra OT hours, days) and the totals recalculate, exactly like your existing sheet.
+          </p>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div className="field"><label>Month</label><input className="mi" type="month" value={sheetMonth} onChange={e=>setSheetMonth(e.target.value)}/></div>
+            <div className="field"><label>Public holidays this month (adds a paid day for everyone; office staff always get +1)</label><input className="mi" type="number" min="0" step="1" value={publicHolidays} onChange={e=>setPublicHolidays(e.target.value)}/></div>
+          </div>
+          {ungrouped.length>0&&<div className="info-box neutral">These users have no payment group yet and will appear under &quot;Ungrouped&quot;: {ungrouped.map(u=>u.name).join(', ')}. Set groups in Manage users.</div>}
+          <button className="add-btn" style={{background:'var(--accent3)',color:'var(--on-accent)'}} onClick={downloadSalarySheet}>↓ DOWNLOAD {monthLabel(sheetMonth||prevMonth).toUpperCase()} SALARY SHEET</button>
+        </>
+      )}
 
       {tab==='register'&&(
         <>

@@ -262,6 +262,29 @@ export function attendanceDaysInMonth(attendance,username,month){
   return days;
 }
 
+// Days a worker was present in a month, for the salary sheet's "Days Worked" column. Combines
+// two signals so basic wage is never lost just because daily attendance was skipped: explicit
+// attendance ALWAYS wins per day (present=1, half=0.5, absent=0), and any UNMARKED day on
+// which the worker completed a production shift counts as 1 (a logged shift is proof they
+// worked). Without this, an operator who completes shifts (which auto-log overtime) but whose
+// attendance nobody marked would show OT pay but zero basic — the bug this fixes.
+export function workedDaysInMonth(attendance,wageLog,username,month){
+  const counted=new Set();
+  let days=0;
+  for(const [date,byUser] of Object.entries(attendance||{})){
+    if(!date.startsWith(month+'-')) continue;
+    const st=(byUser||{})[username];
+    if(st==='present'){ days+=1; counted.add(date); }
+    else if(st==='half'){ days+=0.5; counted.add(date); }
+    else if(st==='absent'){ counted.add(date); } // deliberate absent stays 0; shift can't override it
+  }
+  for(const e of wageLog||[]){
+    if(e.username!==username||monthKeyOf(e.date)!==month) continue;
+    if(!counted.has(e.date)){ days+=1; counted.add(e.date); } // one worked day per date, no double-count
+  }
+  return days;
+}
+
 // Month totals from the manual adjustments ledger, per person.
 export function adjustmentTotalsForMonth(adjustments,username,month){
   const t={food:0,conveyance:0,advance:0};
@@ -340,7 +363,7 @@ export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustmen
         u.name||u.username,
         '',
         isMonthly?`=G${r}/${dim}`:(u.dailyWage||0),
-        attendanceDaysInMonth(attendance,u.username,month),
+        workedDaysInMonth(attendance,wageLog,u.username,month),
         holidays||'',
         `=IF(D${r}<20,0,IF(D${r}=20,1,IF(D${r}=21,2,IF(D${r}=22,3,4))))`,
         isMonthly?(u.monthlySalary||0):'',

@@ -140,8 +140,8 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
         <>
           <p className="modal-note">
             Generates your salary sheet for a whole month — grouped Cheque / Cash / Thekedar / Office with per-group
-            totals, pre-filled from the app: attendance days, wages, machine overtime hours, and conveyance /
-            advances / food from the Allowances tab. The Sunday rule and all totals arrive as <b>live formulas</b>:
+            totals, pre-filled from the app: days worked (marked attendance plus any day with a completed shift),
+            wages, machine overtime hours, and conveyance / advances / food from the Allowances tab. The Sunday rule and all totals arrive as <b>live formulas</b>:
             in Google Sheets use <b>File → Import → Upload</b> and pick this file — then adjust any number
             (extra OT hours, days) and the totals recalculate, exactly like your existing sheet.
           </p>

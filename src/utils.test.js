@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1183,6 +1183,33 @@ describe('salary sheet helpers', () => {
     expect(attendanceDaysInMonth(attendance, 'ravi', '2026-06')).toBe(2.5);
     expect(attendanceDaysInMonth(attendance, 'suresh', '2026-06')).toBe(0);
     expect(attendanceDaysInMonth({}, 'ravi', '2026-06')).toBe(0);
+  });
+
+  it('workedDaysInMonth counts marked attendance plus shift-days on unmarked days', () => {
+    const attendance = {
+      '2026-06-01': { ravi: 'present' },
+      '2026-06-02': { ravi: 'half' },
+      '2026-06-03': { ravi: 'absent' },
+    };
+    const wageLog = [
+      { username: 'ravi', date: '2026-06-01', produced: 120, target: 100, ratePerHour: 10 }, // already present -> no double count
+      { username: 'ravi', date: '2026-06-03', produced: 120, target: 100, ratePerHour: 10 }, // marked absent -> not overridden
+      { username: 'ravi', date: '2026-06-10', produced: 120, target: 100, ratePerHour: 10 }, // unmarked -> counts as 1
+      { username: 'ravi', date: '2026-05-10', produced: 120, target: 100, ratePerHour: 10 }, // wrong month
+    ];
+    // 06-01 present (1) + 06-02 half (0.5) + 06-03 absent (0) + 06-10 shift (1) = 2.5
+    expect(workedDaysInMonth(attendance, wageLog, 'ravi', '2026-06')).toBe(2.5);
+    // No attendance at all: pure shift-day fallback (06-01, 06-03, 06-10 distinct) so basic wage never goes missing.
+    expect(workedDaysInMonth({}, wageLog, 'ravi', '2026-06')).toBe(3);
+  });
+
+  it('workedDaysInMonth: with no attendance, distinct shift-days each count once', () => {
+    const wageLog = [
+      { username: 'ravi', date: '2026-06-10', produced: 120, target: 100, ratePerHour: 10 },
+      { username: 'ravi', date: '2026-06-10', produced: 130, target: 100, ratePerHour: 10 }, // same day, second machine
+      { username: 'ravi', date: '2026-06-11', produced: 120, target: 100, ratePerHour: 10 },
+    ];
+    expect(workedDaysInMonth({}, wageLog, 'ravi', '2026-06')).toBe(2); // two distinct dates
   });
 
   it('adjustmentTotalsForMonth sums food/conveyance/advance for the person and month only', () => {

@@ -58,10 +58,11 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
     const dayDetails=[];
     days.forEach(d=>{
       const status=(attendance[d]||{})[o.username];
+      const entries=entriesByUserDate[o.username+'|'+d]||[];
       if(status==='present')presentDays++;
       else if(status==='half')halfDays++;
       else if(status==='absent')absentDays++;
-      const entries=entriesByUserDate[o.username+'|'+d]||[];
+      else if(entries.length)presentDays++; // completed a shift, attendance unmarked -> counts as present
       const pay=computeOperatorDayPay({entries,attendanceStatus:status,dailyWage:o.dailyWage||0,monthlySalary:o.monthlySalary||0,wageType,date:d});
       basePay+=pay.basePay; otPay+=pay.otPay; pendingCount+=pay.pendingCount;
       if(pay.source==='production') prodShifts+=entries.length;

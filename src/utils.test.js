@@ -539,6 +539,35 @@ describe('computeOperatorDayPay', () => {
     expect(computeOperatorDayPay({ ...args, wageType: undefined })).toEqual(computeOperatorDayPay({ ...args, wageType: 'daily' }));
   });
 
+  it('daily, completed shift but attendance UNMARKED: base still paid (a shift proves the day)', () => {
+    const result = computeOperatorDayPay({
+      entries: [makeEntry({ produced: 140, target: 100 })],
+      attendanceStatus: undefined, dailyWage: 500, wageType: 'daily',
+    });
+    expect(result.basePay).toBe(500); // inferred present, not ₹0
+    expect(result.otPay).toBe(200);
+    expect(result.total).toBe(700);
+  });
+
+  it('monthly, completed shift but attendance UNMARKED: base still paid', () => {
+    const result = computeOperatorDayPay({
+      entries: [makeEntry({ produced: 140, target: 100 })],
+      attendanceStatus: undefined, monthlySalary: 30000, wageType: 'monthly', date: '2026-06-15', // June = 30 days -> 1000/day
+    });
+    expect(result.basePay).toBe(1000);
+    expect(result.otPay).toBe(400); // 40 extra units / (100/8) rate... see makeEntry ratePerHour
+    expect(result.total).toBe(1400);
+  });
+
+  it('explicit absent still wins over a completed shift (no base)', () => {
+    const result = computeOperatorDayPay({
+      entries: [makeEntry({ produced: 140, target: 100 })],
+      attendanceStatus: 'absent', dailyWage: 500, wageType: 'daily',
+    });
+    expect(result.basePay).toBe(0); // deliberate absent respected
+    expect(result.otPay).toBe(200);
+  });
+
   it('daily, absent, no entries: zero', () => {
     const result = computeOperatorDayPay({ entries: [], attendanceStatus: 'absent', dailyWage: 500, wageType: 'daily' });
     expect(result.total).toBe(0);

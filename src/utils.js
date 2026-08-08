@@ -156,7 +156,11 @@ export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,mon
   const wage=wageType==='monthly'
     ? (monthlySalary||0)/daysInMonth(date||todayStr())
     : (dailyWage||0);
-  const attendanceBase=attendanceStatus==='present'?wage:attendanceStatus==='half'?wage/2:0;
+  // A day with a completed shift but no marked attendance counts as a full present day, so a
+  // worker who ran a shift never loses base wage just because attendance went unmarked (base
+  // ₹0 + OT was the reported bug). Explicit attendance (present/half/absent) always wins.
+  const effStatus=attendanceStatus||(entries.length?'present':undefined);
+  const attendanceBase=effStatus==='present'?wage:effStatus==='half'?wage/2:0;
   if(wageType==='production'&&entries.length){
     let basePay=0,otPay=0,pendingCount=0;
     entries.forEach(e=>{

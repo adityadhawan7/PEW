@@ -15,6 +15,7 @@ export default function Topbar({
   setShowAssign, setShowAttendance, setShowUser, setShowMachines,
   ordersAttention, setShowMaintenance, maintAttention, setShowInspections,
   setShowAssemblyModels, setShowPurchasedComponents,
+  onClearTrialData,
   view, setView,
 }) {
   const [menuOpen,setMenuOpen]=useState(false);
@@ -62,6 +63,7 @@ export default function Topbar({
       {label:'Manage users',adminOnly:true,onClick:act(setShowUser)},
       {label:'Attendance',adminOnly:true,onClick:act(setShowAttendance)},
       {label:'Wages',adminOnly:true,active:view==='wages',onClick:goView('wages')},
+      {label:'⚠ Clear trial data',adminOnly:true,onClick:()=>{setMenuOpen(false);setOpenSection(null);onClearTrialData&&onClearTrialData();}},
     ]},
   ];
 

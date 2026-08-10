@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { fb } from '../../firebase.js';
 import { toast } from '../../toast.js';
+import { confirmDialog } from '../../confirmDialog.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary, defaultSlot } from '../../utils.js';
 
 import OperatorHome from './OperatorHome.jsx';
 import AssignModal from '../AssignModal.jsx';
@@ -179,6 +180,29 @@ export default function Dashboard({currentUser,onLogout}) {
   const pushAlert=(type,msg,data=null)=>{ const a={id:Date.now(),type,msg,data,time:nowStr(),date:todayStr(),ts:fullTs()}; writeAlerts([a,...alerts].slice(0,200)); };
   const removeAlert=id=>writeAlerts(alerts.filter(x=>x.id!==id));
   const clearAllAlerts=()=>writeAlerts([]);
+
+  // TEMPORARY one-time trial-data reset (admin-only). Clears all operational/trial data and
+  // resets machine STATE to idle while KEEPING the machine list plus all master data (users,
+  // casting types, assembly models, purchased components, maintenance schedules). To be removed
+  // after the owner runs it once. The nightly backup is the safety net.
+  const handleClearTrialData=async()=>{
+    if(!await confirmDialog('Clear ALL trial data? This wipes wages, attendance, allowances/advances, stock movements, WIP, orders, alerts, inspection & maintenance history, and resets every machine to idle. It KEEPS your users, casting types, assembly models, purchased components, and machine list. This cannot be undone (a nightly backup exists). Continue?')) return;
+    const resetMachines=machines.map(m=>m.shift==='cnc_vmc'
+      ?{...m,...defaultSlot(),shifts:{day:defaultSlot(),night:defaultSlot()}}
+      :{...m,...defaultSlot()});
+    setMachines(resetMachines); await fb.set('machines',resetMachines);
+    setWageLog([]); await fb.set('wage_log',[]);
+    setAdjustments([]); await fb.set('adjustments',[]);
+    setSalarySheets({}); await fb.set('salary_sheets',{});
+    setAttendance({}); await fb.set('attendance',{});
+    setStockLog([]); await fb.set('stock_log',[]);
+    setWip({}); await fb.set('wip',{});
+    setOrders([]); await fb.set('orders',[]);
+    setAlerts([]); await fb.set('alerts',[]);
+    setInspectionLog([]); await fb.set('inspection_log',[]);
+    setMaintLog([]); await fb.set('maintenance_log',[]);
+    toast('✓ Trial data cleared — master data and users kept');
+  };
 
   const setIdle=(id,shiftKey)=>{
     const updated=patchMachineShift(machines,id,shiftKey,{status:'idle',job:null,progress:0});
@@ -450,6 +474,7 @@ export default function Dashboard({currentUser,onLogout}) {
         setShowMaintenance={setShowMaintenance} maintAttention={maintAttention}
         setShowInspections={setShowInspections}
         setShowAssemblyModels={setShowAssemblyModels} setShowPurchasedComponents={setShowPurchasedComponents}
+        onClearTrialData={handleClearTrialData}
         view={view} setView={setView}
       />
 

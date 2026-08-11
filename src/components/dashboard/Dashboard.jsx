@@ -57,6 +57,7 @@ export default function Dashboard({currentUser,onLogout}) {
   const [wip,setWip]=useState({});
   const [stockLog,setStockLog]=useState([]);
   const [attendance,setAttendance]=useState({});
+  const [overtime,setOvertime]=useState({});
   const [wageLog,setWageLog]=useState([]);
   const [adjustments,setAdjustments]=useState([]);
   const [salarySheets,setSalarySheets]=useState({});
@@ -130,11 +131,13 @@ export default function Dashboard({currentUser,onLogout}) {
     const unAM=fb.sub('assembly_models',v=>{if(v)setAssemblyModels(v);});
     const unPC=fb.sub('purchased_components',v=>{if(v)setPurchasedComponents(v);});
     const unS=fb.sub('sessions',v=>{if(v)setSessions(v);});
-    // salary_sheets is a tiny standalone doc ({lastGeneratedMonth}) — loaded outside the main
-    // Promise.all so the big destructuring tuple stays put.
+    // salary_sheets and overtime are standalone docs loaded outside the main Promise.all so the
+    // big destructuring tuple stays put.
     fb.get('salary_sheets').then(v=>{if(v)setSalarySheets(v);});
     const unSS=fb.sub('salary_sheets',v=>{if(v)setSalarySheets(v);});
-    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unAM();unPC();unS();unSS();};
+    fb.get('overtime').then(v=>{if(v)setOvertime(v);});
+    const unOT=fb.sub('overtime',v=>{if(v)setOvertime(v);});
+    return()=>{unM();unA();unCt();unW();unSL();unAt();unWL();unAdj();unOrd();unMS();unML();unIL();unAM();unPC();unS();unSS();unOT();};
   },[]);
 
   useEffect(()=>{
@@ -454,7 +457,7 @@ export default function Dashboard({currentUser,onLogout}) {
       {showBreakdownHistory&&<BreakdownHistoryModal alerts={alerts} machines={machines} onClose={()=>setShowBreakdownHistory(false)}/>}
       {showMaintenance&&<MaintenanceModal machines={machines} schedules={maintSchedules} writeSchedules={writeMaintSchedules} log={maintLog} writeLog={writeMaintLog} currentUser={currentUser} onClose={()=>setShowMaintenance(false)}/>}
       {showInspections&&<InspectionLogModal inspectionLog={inspectionLog} machines={machines} onClose={()=>setShowInspections(false)}/>}
-      {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} onClose={()=>setShowAttendance(false)}/>}
+      {showAttendance&&<AttendanceModal attendance={attendance} setAttendance={setAttendance} overtime={overtime} setOvertime={setOvertime} onClose={()=>setShowAttendance(false)}/>}
       {shiftCompleteData&&<ShiftCompleteModal machine={shiftCompleteData.machine} pj={shiftCompleteData.pj} mode={shiftCompleteData.mode} blockedShortages={shiftCompleteBlockedShortages} onSubmit={handleShiftComplete} onClose={()=>{setShiftCompleteData(null);setShiftCompleteBlockedShortages(null);}}/>}
       {logProgressData&&<LogProgressModal machine={logProgressData.machine} pj={logProgressData.pj} mode={logProgressData.mode} onSubmit={handleLogProgress} onClose={()=>setLogProgressData(null)}/>}
       {breakdownData&&<BreakdownModal machine={breakdownData.machine} onSubmit={handleBreakdownSubmit} onClose={()=>setBreakdownData(null)}/>}
@@ -495,7 +498,7 @@ export default function Dashboard({currentUser,onLogout}) {
       ):safeView==='orders'?(
         <OrdersView orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='wages'?(
-        <WageRegisterView attendance={attendance} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} writeSalarySheetLog={writeSalarySheetLog} initialTab={wagesInitialTab} currentUser={currentUser} onBack={()=>setView('floor')}/>
+        <WageRegisterView attendance={attendance} overtime={overtime} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} writeSalarySheetLog={writeSalarySheetLog} initialTab={wagesInitialTab} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='myshift'?(
       <div className="main-layout">
         <div className="content-area">

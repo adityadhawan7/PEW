@@ -16,7 +16,7 @@ const ADJ_TYPES={
 // computeOperatorDayPay in utils.js for the pay rules (piece-rate vs daily, shortfall gating).
 // The adjustments ledger (manual food/conveyance allowances and salary advances) is entered
 // on the second tab; the register nets it against the period's pay.
-export default function WageRegisterView({attendance,wageLog,adjustments,writeAdjustments,writeSalarySheetLog,currentUser,onBack,initialTab}) {
+export default function WageRegisterView({attendance,overtime={},wageLog,adjustments,writeAdjustments,writeSalarySheetLog,currentUser,onBack,initialTab}) {
   const [users,setUsers]=useState([]);
   useEffect(()=>{ fb.listUserProfiles().then(setUsers); },[]);
   const [from,setFrom]=useState(todayStr());
@@ -68,7 +68,8 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
       else if(status==='half')halfDays++;
       else if(status==='absent')absentDays++;
       else if(entries.length)presentDays++; // completed a shift, attendance unmarked -> counts as present
-      const pay=computeOperatorDayPay({entries,attendanceStatus:status,dailyWage:o.dailyWage||0,monthlySalary:o.monthlySalary||0,wageType,date:d});
+      const otHours=(overtime[d]||{})[o.username]||0;
+      const pay=computeOperatorDayPay({entries,attendanceStatus:status,dailyWage:o.dailyWage||0,monthlySalary:o.monthlySalary||0,wageType,date:d,otHours});
       basePay+=pay.basePay; otPay+=pay.otPay; pendingCount+=pay.pendingCount;
       if(pay.source==='production') prodShifts+=entries.length;
       entries.forEach(e=>dayDetails.push(e));
@@ -125,7 +126,7 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
   };
 
   const downloadSalarySheet=()=>{
-    const csv=buildSalarySheetCsv({users,attendance,wageLog,adjustments,month:sheetMonth,publicHolidays:Number(publicHolidays)||0});
+    const csv=buildSalarySheetCsv({users,attendance,wageLog,adjustments,overtime,month:sheetMonth,publicHolidays:Number(publicHolidays)||0});
     const blob=new Blob([csv],{type:'text/csv'});
     const url=URL.createObjectURL(blob);
     const el=document.createElement('a');

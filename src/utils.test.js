@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel, isActiveEmployee, employedDuring } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, manualOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel, isActiveEmployee, employedDuring } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1211,6 +1211,48 @@ describe('employee lifecycle', () => {
   });
 });
 
+describe('manual overtime', () => {
+  it('manualOtHoursForMonth sums a person\'s OT hours across the month only', () => {
+    const overtime = {
+      '2026-06-03': { ravi: 2, suresh: 1 },
+      '2026-06-20': { ravi: 1.5 },
+      '2026-05-30': { ravi: 4 }, // wrong month
+    };
+    expect(manualOtHoursForMonth(overtime, 'ravi', '2026-06')).toBe(3.5);
+    expect(manualOtHoursForMonth(overtime, 'suresh', '2026-06')).toBe(1);
+    expect(manualOtHoursForMonth({}, 'ravi', '2026-06')).toBe(0);
+  });
+
+  it('computeOperatorDayPay adds manual OT (hours × wage/8) for a daily worker', () => {
+    const r = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', dailyWage: 500, wageType: 'daily', otHours: 2 });
+    expect(r.basePay).toBe(500);
+    expect(r.otPay).toBe(125); // 2 × (500/8)
+    expect(r.total).toBe(625);
+  });
+
+  it('computeOperatorDayPay adds manual OT for a monthly worker at the day rate', () => {
+    const r = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', monthlySalary: 30000, wageType: 'monthly', date: '2026-06-15', otHours: 2 });
+    expect(r.basePay).toBe(1000); // 30000/30
+    expect(r.otPay).toBe(250);    // 2 × (1000/8)
+    expect(r.total).toBe(1250);
+  });
+
+  it('computeOperatorDayPay adds manual OT on top of machine OT for a production worker', () => {
+    const entries = [{ produced: 140, target: 100, ratePerHour: 12.5, status: 'ok' }];
+    const r = computeOperatorDayPay({ entries, attendanceStatus: 'present', dailyWage: 500, wageType: 'production', otHours: 2 });
+    expect(r.basePay).toBe(500);
+    expect(r.otPay).toBe(325); // 200 machine + 125 manual
+    expect(r.source).toBe('production');
+  });
+
+  it('otHours defaulting to 0 leaves pay unchanged (backward compatible)', () => {
+    const a = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', dailyWage: 500, wageType: 'daily' });
+    const b = computeOperatorDayPay({ entries: [], attendanceStatus: 'present', dailyWage: 500, wageType: 'daily', otHours: 0 });
+    expect(a).toEqual(b);
+    expect(a.otPay).toBe(0);
+  });
+});
+
 describe('salary sheet helpers', () => {
   it('paidSundays mirrors the owner\'s IF ladder exactly', () => {
     expect(paidSundays(19)).toBe(0);
@@ -1359,6 +1401,17 @@ describe('buildSalarySheetCsv', () => {
     expect(lines[7]).toContain('=SUM(N7:N7)');
     expect(lines[14].startsWith('TOTAL WAGES')).toBe(true);
     expect(lines[14]).toContain('=N5+N8+N11+N14');
+  });
+
+  it('column I (Hours Worked) sums machine production OT and manual attendance OT', () => {
+    const u = [{ username: 'ravi', name: 'Ravi', payGroup: 'cash', wageType: 'daily', dailyWage: 500 }];
+    const wl = [{ username: 'ravi', date: '2026-06-05', produced: 150, target: 100, ratePerHour: 25 }]; // 50/25 = 2 machine OT hrs
+    const overtime = { '2026-06-06': { ravi: 3 } }; // 3 manual OT hrs
+    const out = buildSalarySheetCsv({ users: u, attendance: {}, wageLog: wl, adjustments: [], overtime, month: '2026-06', publicHolidays: 0 });
+    const ravi = out.split('\n')[3];
+    // Column H is =C4/8, immediately followed by column I (Hours Worked) = 2 machine + 3 manual = 5.
+    // (A naive comma-split misaligns here because the Sunday formula cell contains commas.)
+    expect(ravi).toContain('=C4/8,5,');
   });
 
   it('quotes every cell containing commas so formulas survive CSV parsing', () => {

@@ -152,10 +152,14 @@ export function computeShiftPay(entry, dailyWage){
 //     effective rate over a full calendar month equals exactly the salary; a partial range sums
 //     to a proportional share; a month-spanning range is correct because each day uses its own
 //     month's day-count).
-export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,monthlySalary,wageType,date}){
+export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,monthlySalary,wageType,date,otHours=0}){
   const wage=wageType==='monthly'
     ? (monthlySalary||0)/daysInMonth(date||todayStr())
     : (dailyWage||0);
+  // Manually-entered overtime hours (from the attendance register) for off-machine work, paid
+  // at the same hourly rate as production OT: hours × (daily wage ÷ 8). Added on top of every
+  // branch; the owner enters it only for hours not already captured by a completed shift.
+  const manualOtPay=(Number(otHours)||0)*(wage/8);
   // A day with a completed shift but no marked attendance counts as a full present day, so a
   // worker who ran a shift never loses base wage just because attendance went unmarked (base
   // ₹0 + OT was the reported bug). Explicit attendance (present/half/absent) always wins.
@@ -168,12 +172,13 @@ export function computeOperatorDayPay({entries=[],attendanceStatus,dailyWage,mon
       basePay+=p.basePay; otPay+=p.otPay;
       if(p.pending) pendingCount++;
     });
+    otPay+=manualOtPay;
     return {basePay:round2(basePay),otPay:round2(otPay),total:round2(basePay+otPay),pendingCount,source:'production'};
   }
   if(wageType==='production'){
-    return {basePay:round2(attendanceBase),otPay:0,total:round2(attendanceBase),pendingCount:0,source:'attendance'};
+    return {basePay:round2(attendanceBase),otPay:round2(manualOtPay),total:round2(attendanceBase+manualOtPay),pendingCount:0,source:'attendance'};
   }
-  const otPay=round2(entries.reduce((s,e)=>s+computeShiftPay(e,wage).otPay,0));
+  const otPay=round2(entries.reduce((s,e)=>s+computeShiftPay(e,wage).otPay,0)+manualOtPay);
   return {basePay:round2(attendanceBase),otPay,total:round2(attendanceBase+otPay),pendingCount:0,source:'attendance'};
 }
 
@@ -326,6 +331,18 @@ export function productionOtHoursForMonth(wageLog,username,month){
   return Math.round(hours*100)/100;
 }
 
+// Manually-entered overtime hours for a person over a month, from the `overtime` flat doc
+// ({[date]:{[username]:hours}}) filled on the attendance register. This is the off-machine OT
+// that production shifts can't capture.
+export function manualOtHoursForMonth(overtime,username,month){
+  let hours=0;
+  for(const [date,byUser] of Object.entries(overtime||{})){
+    if(!date.startsWith(month+'-')) continue;
+    hours+=Number((byUser||{})[username])||0;
+  }
+  return Math.round(hours*100)/100;
+}
+
 // Is last month's salary sheet due? Due from the 5th of each month until the previous calendar
 // month has been generated. Returns the due month key ('YYYY-MM') or null.
 export function salarySheetDue(today,lastGeneratedMonth){
@@ -355,7 +372,7 @@ const csvCell = v => {
 // F Sunday · G Monthly · H Overtime Hours (the hourly RATE — his sheet's naming) ·
 // I Hours Worked · J Conveyance · K Total · L Advance · M Food Voucher · N G Total.
 // Per-group Total rows and a grand TOTAL WAGES row are =SUM formulas over the laid-out rows.
-export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustments=[],month,publicHolidays=0}){
+export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustments=[],overtime={},month,publicHolidays=0}){
   const dim=daysInMonth(month+'-01');
   const monthStart=`${month}-01`, monthEnd=`${month}-${String(dim).padStart(2,'0')}`;
   // Only list a person for a month they were actually employed — a departed employee stays on
@@ -379,7 +396,9 @@ export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustmen
       const isMonthly=u.wageType==='monthly'&&(u.monthlySalary||0)>0;
       const holidays=(u.payGroup==='office'?1:0)+(Number(publicHolidays)||0);
       const adj=adjustmentTotalsForMonth(adjustments,u.username,month);
-      const ot=productionOtHoursForMonth(wageLog,u.username,month);
+      // Column I ("Hours Worked" = OT hours) covers both sources: machine production OT plus
+      // OT hand-entered on the attendance register.
+      const ot=Math.round((productionOtHoursForMonth(wageLog,u.username,month)+manualOtHoursForMonth(overtime,u.username,month))*100)/100;
       push([
         u.name||u.username,
         '',

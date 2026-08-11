@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import Modal from './Modal.jsx';
 import { fb } from '../firebase.js';
-import { todayStr } from '../utils.js';
+import { todayStr, isActiveEmployee } from '../utils.js';
 
 // ── Attendance Modal ───────────────────────────────────────
 export default function AttendanceModal({attendance,setAttendance,onClose}) {
   const [users,setUsers]=useState([]);
   useEffect(()=>{ fb.listUserProfiles().then(setUsers); },[]);
   const [date,setDate]=useState(todayStr());
-  const operators=users.filter(u=>u.role==='operator');
+  const operators=users.filter(u=>u.role==='operator'&&isActiveEmployee(u,todayStr()));
   const dayRecord=attendance[date]||{};
   const [msg,setMsg]=useState('');
   const [savingUsername,setSavingUsername]=useState(null);

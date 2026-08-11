@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { fb } from './firebase.js';
+import { isActiveEmployee, todayStr } from './utils.js';
 import LoginScreen from './components/LoginScreen.jsx';
 import ConfirmDialog from './components/ConfirmDialog.jsx';
 import ToastHost from './components/ToastHost.jsx';
@@ -38,6 +39,15 @@ export default function App() {
         // account. Kick them out with a clear reason instead of silently bouncing to login.
         await fb.signOutUser();
         setRevokedMsg('Your account is no longer active. Contact your admin.');
+        setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
+      if(!isActiveEmployee(profile,todayStr())){
+        // Employee marked as left (dateOfLeaving in the past) — keep their record but refuse
+        // entry. Reactivation = an admin clears their leaving date in Manage users.
+        await fb.signOutUser();
+        setRevokedMsg('This account has left the company and is no longer active. Contact your admin.');
         setCurrentUser(null);
         setLoading(false);
         return;

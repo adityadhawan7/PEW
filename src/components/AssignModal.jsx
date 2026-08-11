@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Modal from './Modal.jsx';
 import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
-import { withShift, routeNodeIds, getWip, patchMachineShift, resolveJob, bomLineAvailable, maxBuildable } from '../utils.js';
+import { withShift, routeNodeIds, getWip, patchMachineShift, resolveJob, bomLineAvailable, maxBuildable, isActiveEmployee, todayStr } from '../utils.js';
 
 export default function AssignModal({machines,setMachines,castingTypes,assemblyModels,purchasedComponents,wip,onClose}) {
   const [users,setUsers]=useState([]);
@@ -19,7 +19,7 @@ export default function AssignModal({machines,setMachines,castingTypes,assemblyM
   const [selShift,setSelShift]=useState('day');
   const [msg,setMsg]=useState('');
   const [submitting,setSubmitting]=useState(false);
-  const operators=users.filter(u=>u.role==='operator');
+  const operators=users.filter(u=>u.role==='operator'&&isActiveEmployee(u,todayStr()));
   const cncVmc=machines.filter(m=>m.shift==='cnc_vmc').map(m=>withShift(m,selShift));
   const manualMachines=machines.filter(m=>m.shift==='manual');
   // All assignable machines: CNC/VMC (day/night slot aware) + manual (flat single slot)

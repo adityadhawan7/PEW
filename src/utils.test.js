@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel, isActiveEmployee, employedDuring } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1187,6 +1187,27 @@ describe('attentionSummary', () => {
     expect(attentionSummary({ today: '2026-07-04' }).salarySheetDueMonth).toBe(null);
     expect(attentionSummary({ today: '2026-07-05' }).salarySheetDueMonth).toBe('2026-06');
     expect(attentionSummary({ today: '2026-07-20', salarySheets: { lastGeneratedMonth: '2026-06' } }).salarySheetDueMonth).toBe(null);
+  });
+});
+
+describe('employee lifecycle', () => {
+  const TODAY = '2026-07-14';
+  it('isActiveEmployee: active with no leaving date, or a future one; inactive once passed', () => {
+    expect(isActiveEmployee({}, TODAY)).toBe(true);
+    expect(isActiveEmployee({ dateOfLeaving: '' }, TODAY)).toBe(true);
+    expect(isActiveEmployee({ dateOfLeaving: '2026-08-01' }, TODAY)).toBe(true);  // future notice
+    expect(isActiveEmployee({ dateOfLeaving: '2026-07-14' }, TODAY)).toBe(false); // today = left
+    expect(isActiveEmployee({ dateOfLeaving: '2026-06-30' }, TODAY)).toBe(false); // past
+  });
+
+  it('employedDuring: overlap of [from,to] with the employment window', () => {
+    const joinedLeft = { dateOfJoining: '2026-03-01', dateOfLeaving: '2026-06-30' };
+    expect(employedDuring(joinedLeft, '2026-06-01', '2026-06-30')).toBe(true);  // month they left
+    expect(employedDuring(joinedLeft, '2026-07-01', '2026-07-31')).toBe(false); // after leaving
+    expect(employedDuring(joinedLeft, '2026-01-01', '2026-02-28')).toBe(false); // before joining
+    expect(employedDuring(joinedLeft, '2026-03-01', '2026-03-31')).toBe(true);  // month they joined
+    expect(employedDuring({}, '2026-06-01', '2026-06-30')).toBe(true);          // no dates -> always
+    expect(employedDuring({ dateOfJoining: '2026-06-15' }, '2026-06-01', '2026-06-30')).toBe(true); // joined mid-range
   });
 });
 

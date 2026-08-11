@@ -254,6 +254,19 @@ export function paidSundays(daysWorked){
 
 export const monthKeyOf = dateStr => (dateStr||'').slice(0,7); // 'YYYY-MM-DD' -> 'YYYY-MM'
 
+// ── Employee lifecycle ─────────────────────────────────────
+// A person is active unless they have a dateOfLeaving that has already passed. Future-dated
+// leaving (notice given) stays active until that date. Drives login gating and active rosters
+// (attendance, assign jobs).
+export const isActiveEmployee = (user,today) => !user.dateOfLeaving || user.dateOfLeaving > today;
+
+// Was the person employed during any part of [from, to]? Missing joining/leaving dates mean
+// "always employed" so existing users (and tests) are unaffected. Drives payroll inclusion —
+// a departed operator still appears in the register/salary sheet for periods they worked.
+export const employedDuring = (user,from,to) =>
+  (!user.dateOfJoining || user.dateOfJoining <= to) &&
+  (!user.dateOfLeaving || user.dateOfLeaving >= from);
+
 // Attendance days in a calendar month: present=1, half=0.5. attendance shape: {[date]:{[username]:status}}.
 export function attendanceDaysInMonth(attendance,username,month){
   let days=0;
@@ -344,6 +357,10 @@ const csvCell = v => {
 // Per-group Total rows and a grand TOTAL WAGES row are =SUM formulas over the laid-out rows.
 export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustments=[],month,publicHolidays=0}){
   const dim=daysInMonth(month+'-01');
+  const monthStart=`${month}-01`, monthEnd=`${month}-${String(dim).padStart(2,'0')}`;
+  // Only list a person for a month they were actually employed — a departed employee stays on
+  // sheets for months they worked, and disappears afterwards. Missing dates ⇒ always included.
+  const roster=users.filter(u=>employedDuring(u,monthStart,monthEnd));
   const rows=[]; // arrays of 14 cells
   const push=r=>rows.push(r);
   const blank=()=>new Array(14).fill('');
@@ -353,7 +370,7 @@ export function buildSalarySheetCsv({users=[],attendance={},wageLog=[],adjustmen
 
   const groupTotalRows=[];
   for(const [groupKey,groupLabel] of PAY_GROUPS){
-    const members=users.filter(u=>(u.payGroup||'ungrouped')===groupKey);
+    const members=roster.filter(u=>(u.payGroup||'ungrouped')===groupKey);
     if(!members.length) continue;
     push([groupLabel,...new Array(13).fill('')]);
     const firstDataRow=rows.length+1; // 1-indexed row of the first member line

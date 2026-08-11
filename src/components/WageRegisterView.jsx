@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PageView from './PageView.jsx';
 import { fb } from '../firebase.js';
-import { todayStr, nowStr, fullTs, computeOperatorDayPay, buildSalarySheetCsv, monthLabel } from '../utils.js';
+import { todayStr, nowStr, fullTs, computeOperatorDayPay, buildSalarySheetCsv, monthLabel, employedDuring, isActiveEmployee } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
 const ADJ_TYPES={
@@ -52,7 +52,12 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
     (entriesByUserDate[key]=entriesByUserDate[key]||[]).push(e);
   });
 
-  const rows=operators.map(o=>{
+  // Departed operators still appear for a range they were employed in; new-allowance entry
+  // targets only currently-active operators.
+  const registerOperators=operators.filter(o=>employedDuring(o,from,to));
+  const activeOperators=operators.filter(o=>isActiveEmployee(o,todayStr()));
+
+  const rows=registerOperators.map(o=>{
     const wageType=o.wageType||'daily';
     let presentDays=0,halfDays=0,absentDays=0,basePay=0,otPay=0,pendingCount=0,prodShifts=0;
     const dayDetails=[];
@@ -217,7 +222,7 @@ export default function WageRegisterView({attendance,wageLog,adjustments,writeAd
           <div className="field"><label>Operator</label>
             <select className="mi" value={adjForm.username} onChange={e=>setAdjForm({...adjForm,username:e.target.value})}>
               <option value="">— Select operator —</option>
-              {operators.map(o=><option key={o.username} value={o.username}>{o.name} ({o.username})</option>)}
+              {activeOperators.map(o=><option key={o.username} value={o.username}>{o.name} ({o.username})</option>)}
             </select>
           </div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>

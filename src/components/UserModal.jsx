@@ -2,15 +2,18 @@ import { useState, useEffect, useCallback } from 'react';
 import Modal from './Modal.jsx';
 import { fb } from '../firebase.js';
 import { AC } from '../constants.js';
-import { initials } from '../utils.js';
+import { initials, todayStr } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
+
+const BLANK_FORM={username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',monthlySalary:'',wageType:'daily',payGroup:'cash',dateOfJoining:'',aadhaar:'',dateOfLeaving:''};
+const fmtDate=d=>{ if(!d) return ''; const dt=new Date(d+'T00:00:00'); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); };
 
 // ── User Modal ─────────────────────────────────────────────
 export default function UserModal({currentUser,onClose}) {
   const [users,setUsers]=useState([]);
   const [loadingUsers,setLoadingUsers]=useState(true);
   const [editing,setEditing]=useState(null); // 'new', or the uid being edited
-  const [form,setForm]=useState({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',monthlySalary:'',wageType:'daily',payGroup:'cash'});
+  const [form,setForm]=useState(BLANK_FORM);
   const [msg,setMsg]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const [removingUid,setRemovingUid]=useState(null);
@@ -31,14 +34,17 @@ export default function UserModal({currentUser,onClose}) {
     if(isNaN(monthlySalary)||monthlySalary<0) return setMsg('Monthly salary must be a number 0 or greater.');
     if(editing==='new'&&!form.password) return setMsg('Password required.');
     if(form.password&&form.password.length<6) return setMsg('Password must be at least 6 characters (Firebase requirement).');
+    const aadhaar=(form.aadhaar||'').replace(/\s/g,'');
+    if(aadhaar&&!/^\d{12}$/.test(aadhaar)) return setMsg('Aadhaar must be 12 digits (or leave it blank).');
+    const hr={dateOfJoining:form.dateOfJoining||'',aadhaar,dateOfLeaving:form.dateOfLeaving||''};
     setMsg('Saving…');
     setSubmitting(true);
     try{
       if(editing==='new'){
-        await fb.createUserWithProfile(form.username.trim(),form.password,{name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType,payGroup:form.payGroup});
+        await fb.createUserWithProfile(form.username.trim(),form.password,{name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType,payGroup:form.payGroup,...hr});
       } else {
         const target=users.find(u=>u.uid===editing);
-        await fb.setUserProfile(editing,{username:target.username,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType,payGroup:form.payGroup});
+        await fb.setUserProfile(editing,{username:target.username,name:form.name,role:form.role,shift:form.shift,dailyWage:wage,monthlySalary,wageType:form.wageType,payGroup:form.payGroup,...hr});
         // A filled password field on an existing user means "reset their password" —
         // goes through the admin-gated resetUserPassword Cloud Function.
         if(form.password) await fb.resetUserPassword(editing,form.password);
@@ -72,19 +78,19 @@ export default function UserModal({currentUser,onClose}) {
       {!editing?(
         <>
           {loadingUsers?<div className="empty">Loading…</div>:users.map(u=>(
-            <div className="user-row" key={u.uid}>
+            <div className="user-row" key={u.uid} style={u.dateOfLeaving?{opacity:.55}:undefined}>
               <div className="user-row-avatar" style={{background:AC[u.role]||'#888'}}>{initials(u.name)}</div>
               <div className="user-row-info">
-                <div className="user-row-name">{u.name}{u.uid===currentUser.uid?' (you)':''}</div>
-                <div className="user-row-meta">{u.username} · {u.role}{u.payGroup?` · ${u.payGroup}`:''}{u.role==='operator'?(u.wageType==='monthly'?` · ₹${u.monthlySalary||0}/month`:` · ₹${u.dailyWage||0}/day${u.wageType==='production'?' · piece-rate':''}`):''}</div>
+                <div className="user-row-name">{u.name}{u.uid===currentUser.uid?' (you)':''}{u.dateOfLeaving?<span style={{marginLeft:6,fontSize:10,color:'var(--danger)',fontWeight:600}}>· LEFT {fmtDate(u.dateOfLeaving)}</span>:''}</div>
+                <div className="user-row-meta">{u.username} · {u.role}{u.payGroup?` · ${u.payGroup}`:''}{u.dateOfJoining?` · joined ${fmtDate(u.dateOfJoining)}`:''}{u.role==='operator'?(u.wageType==='monthly'?` · ₹${u.monthlySalary||0}/month`:` · ₹${u.dailyWage||0}/day${u.wageType==='production'?' · piece-rate':''}`):''}</div>
               </div>
               <div className="user-row-actions">
-                <button className="small-btn" disabled={removingUid===u.uid} onClick={()=>{setForm({username:u.username,password:'',name:u.name,role:u.role,shift:u.shift,dailyWage:u.dailyWage??'',monthlySalary:u.monthlySalary??'',wageType:u.wageType||'daily',payGroup:u.payGroup||'cash'});setEditing(u.uid);setMsg('');}}>Edit</button>
+                <button className="small-btn" disabled={removingUid===u.uid} onClick={()=>{setForm({username:u.username,password:'',name:u.name,role:u.role,shift:u.shift,dailyWage:u.dailyWage??'',monthlySalary:u.monthlySalary??'',wageType:u.wageType||'daily',payGroup:u.payGroup||'cash',dateOfJoining:u.dateOfJoining||'',aadhaar:u.aadhaar||'',dateOfLeaving:u.dateOfLeaving||''});setEditing(u.uid);setMsg('');}}>Edit</button>
                 <button className="small-btn danger" disabled={removingUid===u.uid} onClick={()=>remove(u)}>{removingUid===u.uid?'Removing…':'Remove'}</button>
               </div>
             </div>
           ))}
-          <button className="add-btn" style={{marginTop:'.5rem'}} onClick={()=>{setForm({username:'',password:'',name:'',role:'operator',shift:'day',dailyWage:'',monthlySalary:'',wageType:'daily',payGroup:'cash'});setEditing('new');setMsg('');}}>+ ADD USER</button>
+          <button className="add-btn" style={{marginTop:'.5rem'}} onClick={()=>{setForm(BLANK_FORM);setEditing('new');setMsg('');}}>+ ADD USER</button>
           {msg&&<div className="save-msg">{msg}</div>}
         </>
       ):(
@@ -102,6 +108,20 @@ export default function UserModal({currentUser,onClose}) {
               <option value="day">CNC/VMC — Day</option><option value="night">CNC/VMC — Night</option><option value="manual">Manual/Labour</option>
             </select>
           </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div className="field"><label>Date of joining</label><input type="date" className="mi" value={form.dateOfJoining} onChange={e=>setForm({...form,dateOfJoining:e.target.value})}/></div>
+            <div className="field"><label>Aadhaar number (optional)</label><input className="mi" inputMode="numeric" value={form.aadhaar} onChange={e=>setForm({...form,aadhaar:e.target.value})} placeholder="12 digits"/></div>
+          </div>
+          {editing!=='new'&&(
+            <div className="field"><label>Date of leaving (blank = still employed; setting it deactivates their login and removes them from active rosters)</label>
+              <div style={{display:'flex',gap:6}}>
+                <input type="date" className="mi" value={form.dateOfLeaving} onChange={e=>setForm({...form,dateOfLeaving:e.target.value})}/>
+                {!form.dateOfLeaving
+                  ?<button className="small-btn" type="button" onClick={()=>setForm({...form,dateOfLeaving:todayStr()})}>Set today</button>
+                  :<button className="small-btn" type="button" onClick={()=>setForm({...form,dateOfLeaving:''})}>Clear</button>}
+              </div>
+            </div>
+          )}
           <div className="field"><label>Payment group (groups the monthly salary sheet)</label>
             <div className="role-chips">{[['cheque','Cheque'],['cash','Cash'],['thekedar','Thekedar'],['office','Office']].map(([v,l])=><div key={v} className={`role-chip${form.payGroup===v?' active':''}`} onClick={()=>setForm({...form,payGroup:v})}>{l}</div>)}</div>
           </div>

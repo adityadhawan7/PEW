@@ -43,6 +43,7 @@ const OnlineModal=lazyWithReload(()=>import('../OnlineModal.jsx'));
 const DownloadModal=lazyWithReload(()=>import('../DownloadModal.jsx'));
 const BreakdownHistoryModal=lazyWithReload(()=>import('../BreakdownHistoryModal.jsx'));
 const StockView=lazyWithReload(()=>import('../StockView.jsx'));
+const PlanningView=lazyWithReload(()=>import('../PlanningView.jsx'));
 const AttendanceModal=lazyWithReload(()=>import('../AttendanceModal.jsx'));
 const WageRegisterView=lazyWithReload(()=>import('../WageRegisterView.jsx'));
 
@@ -432,7 +433,7 @@ export default function Dashboard({currentUser,onLogout}) {
   // Defensive: a view a role isn't entitled to falls back to that role's home. In practice
   // unreachable (every setter is role-gated and role is fixed per session) — belt and braces.
   const safeView=
-    ((view==='stock'||view==='orders'||view==='analytics')&&!isAdmin)?'floor':
+    ((view==='stock'||view==='orders'||view==='analytics'||view==='planning')&&!isAdmin)?'floor':
     (view==='wages'&&currentUser.role!=='admin')?'floor': // NOT isAdmin — supervisors must never see pay data
     view;
   const rawSelectedM=machines.find(x=>x.id===selectedMachine);
@@ -497,6 +498,8 @@ export default function Dashboard({currentUser,onLogout}) {
         />
       ):safeView==='orders'?(
         <OrdersView orders={orders} writeOrders={writeOrders} castingTypes={castingTypes} wip={wip} currentUser={currentUser} onBack={()=>setView('floor')}/>
+      ):safeView==='planning'?(
+        <PlanningView castingTypes={castingTypes} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} orders={orders} wip={wip} machines={machines} onBack={()=>setView('floor')}/>
       ):safeView==='wages'?(
         <WageRegisterView attendance={attendance} overtime={overtime} wageLog={wageLog} adjustments={adjustments} writeAdjustments={writeAdjustments} writeSalarySheetLog={writeSalarySheetLog} initialTab={wagesInitialTab} currentUser={currentUser} onBack={()=>setView('floor')}/>
       ):safeView==='myshift'?(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, manualOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel, isActiveEmployee, employedDuring } from './utils.js';
+import { calcOtPay, computeShiftCompletionUpdate, wipKey, computeShiftPay, computeOperatorDayPay, orderDueState, applyDispatchToOrder, maintenanceDueDate, maintenanceDueState, aggregateDailyOutput, aggregateMachineEff, aggregateOperatorPerf, aggregateDefects, aggregateBreakdowns, aggregateMaintCost, aggregateFoundryScore, daysInMonth, finishedOnHand, bomLineAvailable, maxBuildable, computeAssemblyShiftUpdate, assemblyWipKey, operatorAssignments, attentionSummary, paidSundays, attendanceDaysInMonth, workedDaysInMonth, adjustmentTotalsForMonth, productionOtHoursForMonth, manualOtHoursForMonth, salarySheetDue, buildSalarySheetCsv, monthLabel, isActiveEmployee, employedDuring, wipInProcess, buildProductionPlan } from './utils.js';
 
 describe('calcOtPay', () => {
   it('returns zero when produced is at or below target', () => {
@@ -1419,5 +1419,130 @@ describe('buildSalarySheetCsv', () => {
     const mukeshCells = lines[3].match(/("([^"]|"")*"|[^,]*)(,|$)/g);
     expect(lines[3]).toContain('"=IF(D4<20,0,IF(D4=20,1,IF(D4=21,2,IF(D4=22,3,4))))"');
     expect(mukeshCells.length).toBeGreaterThan(0);
+  });
+});
+
+describe('wipInProcess', () => {
+  it('is entered minus finished minus scrapped, floored at 0', () => {
+    expect(wipInProcess({ '1:entered': 10, '1:finished': 3, '1:scrapped': 1 }, 1)).toBe(6);
+    expect(wipInProcess({ '1:entered': 2, '1:finished': 5 }, 1)).toBe(0); // never negative
+    expect(wipInProcess({}, 1)).toBe(0);
+  });
+});
+
+describe('buildProductionPlan', () => {
+  const ct = () => makeCastingType(); // id 1, bottleneck node target 50, rawBalance 100
+  const openOrder = (items, dueDate = '2026-08-25') => ({ id: 1, status: 'open', dueDate, items });
+
+  it('demand nets dispatched and clamps at zero (fully dispatched line drops out)', () => {
+    const plan = buildProductionPlan({
+      castingTypes: [ct()], orders: [openOrder([{ castingTypeId: 1, qty: 20, dispatched: 5 }])],
+      wip: {}, today: '2026-08-18',
+    });
+    expect(plan.castings).toHaveLength(1);
+    expect(plan.castings[0].demand).toBe(15);
+
+    const none = buildProductionPlan({
+      castingTypes: [ct()], orders: [openOrder([{ castingTypeId: 1, qty: 20, dispatched: 20 }])],
+      wip: {}, today: '2026-08-18',
+    });
+    expect(none.castings).toHaveLength(0); // no remaining demand
+  });
+
+  it('finished stock covering demand → verdict "covered"', () => {
+    const plan = buildProductionPlan({
+      castingTypes: [ct()], orders: [openOrder([{ castingTypeId: 1, qty: 5, dispatched: 0 }])],
+      wip: { '1:finished': 10 }, today: '2026-08-18',
+    });
+    expect(plan.castings[0].verdict).toBe('covered');
+    expect(plan.castings[0].notYetStarted).toBe(0);
+  });
+
+  it('WIP covering the remainder → verdict "inProcess", no raw needed', () => {
+    const plan = buildProductionPlan({
+      castingTypes: [ct()], orders: [openOrder([{ castingTypeId: 1, qty: 10, dispatched: 0 }])],
+      wip: { '1:finished': 2, '1:entered': 10 }, today: '2026-08-18', // 2 finished + (10−2) in process = 10
+    });
+    expect(plan.castings[0].verdict).toBe('inProcess');
+    expect(plan.castings[0].notYetStarted).toBe(0);
+    expect(plan.castings[0].rawShortfall).toBe(0);
+  });
+
+  it('raw short of what must still be started → verdict "shortRaw" with the exact shortfall', () => {
+    const short = { ...ct(), rawBalance: 3 };
+    const plan = buildProductionPlan({
+      castingTypes: [short], orders: [openOrder([{ castingTypeId: 1, qty: 20, dispatched: 0 }])],
+      wip: {}, today: '2026-08-18',
+    });
+    expect(plan.castings[0].verdict).toBe('shortRaw');
+    expect(plan.castings[0].notYetStarted).toBe(20);
+    expect(plan.castings[0].rawShortfall).toBe(17); // 20 to make − 3 raw
+    expect(plan.toOrder).toContainEqual({ kind: 'casting', name: 'Shaft Blank', shortfall: 17, unit: 'pcs' });
+  });
+
+  it('enough raw but nothing made yet → "rawReady" with a bottleneck-based shift estimate', () => {
+    const plan = buildProductionPlan({
+      castingTypes: [ct()], orders: [openOrder([{ castingTypeId: 1, qty: 10, dispatched: 0 }])],
+      wip: {}, today: '2026-08-18',
+    });
+    expect(plan.castings[0].verdict).toBe('rawReady');
+    expect(plan.castings[0].throughputPerShift).toBe(50); // slowest node target
+    expect(plan.castings[0].shiftsNeeded).toBe(1); // ceil(10/50)
+  });
+
+  it('sorts overdue before due-soon before later-due', () => {
+    const ctA = { ...makeCastingType(), id: 1, name: 'A' };
+    const ctB = { ...makeCastingType(), id: 2, name: 'B' };
+    const ctC = { ...makeCastingType(), id: 3, name: 'C' };
+    const orders = [
+      { id: 1, status: 'open', dueDate: '2026-08-20', items: [{ castingTypeId: 2, qty: 5 }] }, // dueSoon (within 3d)
+      { id: 2, status: 'open', dueDate: '2026-08-10', items: [{ castingTypeId: 1, qty: 5 }] }, // overdue
+      { id: 3, status: 'open', dueDate: '2026-09-30', items: [{ castingTypeId: 3, qty: 5 }] }, // ok, far off
+    ];
+    const plan = buildProductionPlan({ castingTypes: [ctA, ctB, ctC], orders, wip: {}, today: '2026-08-18' });
+    expect(plan.castings.map(r => r.name)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('assemblies: canBuildNow limited by the tightest BOM line, with that line as the bottleneck', () => {
+    const model = { id: 7, name: 'Lever Assembly', unit: 'pcs', bom: [
+      { kind: 'casting', itemId: 1, qty: 2 },   // 10 finished / 2 = 5
+      { kind: 'purchased', itemId: 9, qty: 1 },  // 3 balance / 1 = 3  ← bottleneck
+    ] };
+    const plan = buildProductionPlan({
+      castingTypes: [ct()], assemblyModels: [model],
+      purchasedComponents: [{ id: 9, name: 'Spring kit', unit: 'set', balance: 3, lowThreshold: 5 }],
+      orders: [], wip: { '1:finished': 10, 'asm:7:finished': 4 }, today: '2026-08-18',
+    });
+    expect(plan.assemblies[0].canBuildNow).toBe(3);
+    expect(plan.assemblies[0].builtOnHand).toBe(4);
+    expect(plan.assemblies[0].bottleneck.itemName).toBe('Spring kit');
+    // Low purchased component also lands on the shopping list.
+    expect(plan.toOrder).toContainEqual({ kind: 'purchased', name: 'Spring kit', balance: 3, unit: 'set', vendor: '' });
+  });
+
+  it('casting types with no open orders surface only when raw is at/below the low mark', () => {
+    const lowCt = { ...makeCastingType(), id: 2, name: 'Idle low', rawBalance: 5, lowThreshold: 10 };
+    const okCt = { ...makeCastingType(), id: 3, name: 'Idle fine', rawBalance: 80, lowThreshold: 10 };
+    const plan = buildProductionPlan({ castingTypes: [lowCt, okCt], orders: [], wip: {}, today: '2026-08-18' });
+    expect(plan.castings).toHaveLength(0);
+    expect(plan.lowRawNoOrders.map(r => r.name)).toEqual(['Idle low']);
+  });
+
+  it('capacity counts cnc_vmc machines as two shifts/day, others as one, over the horizon', () => {
+    const machines = [
+      { id: 'C1', shift: 'cnc_vmc' }, { id: 'C2', shift: 'cnc_vmc' },
+      { id: 'M1', shift: 'manual' }, { id: 'A1', shift: 'manual', type: 'assembly' },
+    ];
+    const plan = buildProductionPlan({ castingTypes: [], orders: [], wip: {}, machines, today: '2026-08-18' });
+    expect(plan.capacity).toMatchObject({ horizonDays: 3, cncCount: 2, manualCount: 2, machineShifts: 2 * 2 * 3 + 2 * 3 });
+  });
+
+  it('ignores non-open orders', () => {
+    const orders = [
+      { id: 1, status: 'completed', dueDate: '2026-08-20', items: [{ castingTypeId: 1, qty: 5 }] },
+      { id: 2, status: 'cancelled', dueDate: '2026-08-20', items: [{ castingTypeId: 1, qty: 5 }] },
+    ];
+    const plan = buildProductionPlan({ castingTypes: [ct()], orders, wip: {}, today: '2026-08-18' });
+    expect(plan.castings).toHaveLength(0);
   });
 });

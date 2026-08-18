@@ -241,6 +241,108 @@ export function attentionSummary({orders=[],maintSchedules=[],castingTypes=[],pu
   };
 }
 
+// ── Production planning ────────────────────────────────────
+// How many pieces of a casting type are mid-route: entered the route but not yet finished or
+// scrapped. Same conservation-of-mass read StockView shows (was a private local there) — exported
+// so the Planning view and StockView share ONE definition, like finishedOnHand.
+export const wipInProcess = (wip,castingTypeId) =>
+  Math.max(0,Math.round((getWip(wip,castingTypeId,'entered')-getWip(wip,castingTypeId,'finished')-getWip(wip,castingTypeId,'scrapped'))*100)/100);
+
+// Bottleneck throughput (pieces/shift) for a casting type: the slowest node's target gates how
+// fast finished pieces actually come out the end. Ignores nodes with no positive target; null
+// when no node carries a usable target (⇒ the Planning view shows "—" for the shifts estimate).
+const bottleneckTarget = ct => {
+  const targets=(ct.nodes||[]).map(n=>Number(n.target)).filter(t=>t>0);
+  return targets.length?Math.min(...targets):null;
+};
+
+// Read-only "what to run next" summary over the next `horizonDays` (fixed at 3 in the UI). Pure —
+// reads current casting/assembly/order/wip/machine state and writes nothing; the Planning view
+// is advisory and never assigns machines. See CLAUDE.md "Production planning" for the model.
+// Demand = remaining-to-dispatch on OPEN orders; a casting still needs raw only for pieces not
+// already finished OR mid-route ⇒ notYetStarted = demand − finishedReady − inProcess, and
+// rawShortfall = notYetStarted − rawBalance. Assembly order-demand stays 0 until the Phase-3
+// assembly-orders UI exists (order lines default itemType 'casting').
+export function buildProductionPlan({castingTypes=[],assemblyModels=[],purchasedComponents=[],orders=[],wip={},machines=[],today,horizonDays=3}){
+  const openOrders=(orders||[]).filter(o=>o&&o.status==='open');
+  const demandByCt=new Map();   // ctId(Number) -> {demand, earliestDue}
+  const demandByAsm=new Map();  // modelId(Number) -> demand
+  for(const o of openOrders){
+    for(const it of (o.items||[])){
+      const remaining=Math.max(0,(Number(it.qty)||0)-(Number(it.dispatched)||0));
+      if(remaining<=0) continue;
+      if((it.itemType||'casting')==='assembly'){
+        const id=Number(it.assemblyModelId);
+        demandByAsm.set(id,(demandByAsm.get(id)||0)+remaining);
+      }else{
+        const id=Number(it.castingTypeId);
+        const cur=demandByCt.get(id)||{demand:0,earliestDue:null};
+        cur.demand+=remaining;
+        if(o.dueDate&&(!cur.earliestDue||o.dueDate<cur.earliestDue)) cur.earliestDue=o.dueDate;
+        demandByCt.set(id,cur);
+      }
+    }
+  }
+  const castings=[], toOrder=[], lowRawNoOrders=[];
+  for(const ct of castingTypes){
+    const finishedReady=finishedOnHand(wip,ct.id);
+    const inProcess=wipInProcess(wip,ct.id);
+    const rawBalance=Number(ct.rawBalance)||0;
+    const lowThreshold=Number(ct.lowThreshold)||0;
+    const d=demandByCt.get(Number(ct.id));
+    if(!d||d.demand<=0){
+      if(rawBalance<=lowThreshold) lowRawNoOrders.push({id:ct.id,name:ct.name,unit:ct.unit,rawBalance,lowThreshold});
+      continue;
+    }
+    const demand=d.demand;
+    const notYetStarted=Math.max(0,Math.round((demand-finishedReady-inProcess)*100)/100);
+    const rawShortfall=Math.max(0,Math.round((notYetStarted-rawBalance)*100)/100);
+    const throughputPerShift=bottleneckTarget(ct);
+    const shiftsNeeded=throughputPerShift?Math.ceil(notYetStarted/throughputPerShift):null;
+    const verdict=demand<=finishedReady?'covered':notYetStarted<=0?'inProcess':rawShortfall>0?'shortRaw':'rawReady';
+    castings.push({id:ct.id,name:ct.name,unit:ct.unit,demand,earliestDue:d.earliestDue,
+      dueState:dueStateForDate(d.earliestDue,today,horizonDays),
+      finishedReady,inProcess,rawBalance,notYetStarted,rawShortfall,throughputPerShift,shiftsNeeded,verdict});
+    if(rawShortfall>0) toOrder.push({kind:'casting',name:ct.name,shortfall:rawShortfall,unit:ct.unit});
+  }
+  const rank={overdue:0,dueSoon:1,ok:2};
+  castings.sort((a,b)=>{
+    const ra=rank[a.dueState]??3, rb=rank[b.dueState]??3;
+    if(ra!==rb) return ra-rb;
+    if(a.earliestDue&&b.earliestDue&&a.earliestDue!==b.earliestDue) return a.earliestDue<b.earliestDue?-1:1;
+    return b.notYetStarted-a.notYetStarted;
+  });
+  for(const pc of purchasedComponents){
+    if((pc.balance||0)<=(pc.lowThreshold||0)) toOrder.push({kind:'purchased',name:pc.name,balance:pc.balance||0,unit:pc.unit,vendor:pc.vendor||''});
+  }
+  const nameUnit=line=>{
+    const src=line.kind==='casting'
+      ?(castingTypes.find(c=>Number(c.id)===Number(line.itemId))||{})
+      :(purchasedComponents.find(p=>Number(p.id)===Number(line.itemId))||{});
+    return {name:src.name||'?',unit:src.unit||''};
+  };
+  const assemblies=(assemblyModels||[]).map(model=>{
+    let bottleneck=null;
+    for(const line of (model.bom||[])){
+      if(!line.qty||line.qty<=0) continue;
+      const avail=bomLineAvailable(castingTypes,purchasedComponents,wip,line);
+      const cap=Math.floor(avail/line.qty);
+      if(!bottleneck||cap<bottleneck.cap){
+        const {name,unit}=nameUnit(line);
+        bottleneck={kind:line.kind,itemId:line.itemId,itemName:name,unit,available:avail,qtyPer:line.qty,cap};
+      }
+    }
+    return {id:model.id,name:model.name,unit:model.unit,
+      builtOnHand:wip[assemblyWipKey(model.id,'finished')]||0,
+      canBuildNow:maxBuildable(castingTypes,purchasedComponents,wip,model.bom),
+      bottleneck,demand:demandByAsm.get(Number(model.id))||0};
+  });
+  const cncCount=(machines||[]).filter(m=>m.shift==='cnc_vmc').length;
+  const manualCount=(machines||[]).filter(m=>m&&m.shift!=='cnc_vmc').length;
+  const capacity={horizonDays,cncCount,manualCount,machineShifts:cncCount*2*horizonDays+manualCount*horizonDays};
+  return {castings,assemblies,toOrder,lowRawNoOrders,capacity};
+}
+
 // ── Monthly salary sheet ───────────────────────────────────
 // Generates the owner's hand-built Google Sheet payroll format as a CSV whose cells carry LIVE
 // formulas — Google Sheets' importer converts "=IF(...)" strings into real formulas, so the

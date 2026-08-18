@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import PageView from './PageView.jsx';
 import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
-import { todayStr, nowStr, fullTs, routeNodeIds, getWip, applyDispatchToOrder, finishedOnHand } from '../utils.js';
+import { todayStr, nowStr, fullTs, routeNodeIds, getWip, applyDispatchToOrder, finishedOnHand, wipInProcess } from '../utils.js';
 import { confirmDialog } from '../confirmDialog.js';
 
 // ── Stock control (full-page view) ─────────────────────────
@@ -165,12 +165,7 @@ export default function StockView({castingTypes,setCastingTypes,wip,setWip,stock
   // correct regardless of forks/joins, since it never double-books a piece against two pools.
   // Only reflects shifts completed after these counters were added — doesn't retroactively count
   // pieces already mid-route in older data (they'll show 0 here until they reach a route's end).
-  const totalWipForCastingType=ct=>{
-    const entered=getWip(wip,ct.id,'entered');
-    const finished=getWip(wip,ct.id,'finished');
-    const scrapped=getWip(wip,ct.id,'scrapped');
-    return Math.max(0,Math.round((entered-finished-scrapped)*100)/100);
-  };
+  const totalWipForCastingType=ct=>wipInProcess(wip,ct.id);
 
   return (
     <PageView title="Stock control" onBack={onBack}>

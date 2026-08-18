@@ -53,6 +53,7 @@ export default function Topbar({
       {label:'Breakdown history',onClick:act(setShowBreakdownHistory)},
     ]},
     {id:'insights',label:'Insights',items:[
+      {label:'Planning',active:view==='planning',onClick:goView('planning')},
       {label:'Analytics',active:view==='analytics',onClick:goView('analytics')},
       {label:'↓ Download report',onClick:act(setShowDownload)},
     ]},

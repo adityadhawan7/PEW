@@ -48,9 +48,8 @@ export default function PlanningView({ castingTypes = [], assemblyModels = [], p
   return (
     <PageView title="Planning — next 3 days" onBack={onBack}>
       <p className="modal-note">
-        What to run next, from your open orders and the material you have on hand. For each casting type: what's still
-        owed to customers vs. finished stock, work-in-process, and raw material — with the pieces you'd still need to make
-        (and any raw shortfall). Advisory only — nothing here changes machine assignments. Shift estimates are rough.
+        What to run next, from your open orders and the material on hand — what's still owed to customers vs. finished
+        stock, work-in-process and raw material, with any raw shortfall flagged. Advisory only; rough estimates.
       </p>
 
       <div className="pj-meta" style={{ marginBottom: '1rem' }}>
@@ -89,7 +88,7 @@ export default function PlanningView({ castingTypes = [], assemblyModels = [], p
                 <div className="pj-meta">
                   {fmt(row.finishedReady)} finished ready · {fmt(row.inProcess)} in process · {fmt(row.rawBalance)} raw ·
                   <b> {fmt(row.notYetStarted)} still to make</b>
-                  {row.shiftsNeeded != null ? ` · ≈ ${row.shiftsNeeded} shift${row.shiftsNeeded === 1 ? '' : 's'}` : ''}
+                  {row.notYetStarted > 0 && row.shiftsNeeded != null ? ` · ≈ ${row.shiftsNeeded} shift${row.shiftsNeeded === 1 ? '' : 's'}` : ''}
                 </div>
               </div>
               <VerdictChip row={row} />

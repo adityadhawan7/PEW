@@ -29,15 +29,24 @@ export default function MachineGrid({
                 <div className="m-row"><span className="m-id">{m.id}</span><div className="m-dot"></div></div>
                 <div className="m-name">{m.name}</div>
                 <span className="m-badge" style={{background:BADGE[m.type].bg,color:BADGE[m.type].color}}>{BADGE[m.type].lbl}</span>
-                <div className="m-job">{displayJob}</div>
-                {m.assignedOperator&&<div className="m-op">👤 {m.operator}</div>}
-                <div className="m-prog-bg"><div className="m-prog-fill" style={{width:`${m.progress}%`}}></div></div>
-                {hasJob?(
-                  <div className="m-units">{m.prodCount}/{effectiveTarget} units</div>
-                ):(
-                  <div className="m-units">No job assigned</div>
-                )}
-                {hasJob&&m.shiftComplete&&<span className={`shift-done-tag${m.prodCount>=effectiveTarget?' ok':' low'}`}>{m.prodCount}/{effectiveTarget}</span>}
+                <div className="m-body">
+                  {hasJob?(
+                    <>
+                      <div className="m-job">{displayJob}</div>
+                      {m.assignedOperator&&<div className="m-op">👤 {m.operator}</div>}
+                      <div className="m-foot">
+                        <div className="m-prog-bg"><div className="m-prog-fill" style={{width:`${m.progress}%`}}></div></div>
+                        {m.shiftComplete?(
+                          <span className={`shift-done-tag${m.prodCount>=effectiveTarget?' ok':' low'}`}>{m.prodCount>=effectiveTarget?'✓':'⚠'} {m.prodCount}/{effectiveTarget}</span>
+                        ):(
+                          <div className="m-units">{m.prodCount}/{effectiveTarget} units</div>
+                        )}
+                      </div>
+                    </>
+                  ):(
+                    <div className="m-empty">No job assigned</div>
+                  )}
+                </div>
               </div>
             );
           })}

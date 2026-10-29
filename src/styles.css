@@ -3,14 +3,16 @@
    baseline; a light palette follows the device setting via prefers-color-scheme below. */
 :root{
   color-scheme:dark;
-  --bg:#12151b;--bg2:#171b23;--bg3:#1d222c;--bg4:#242a37;--bg5:#2d3444;
-  --border:#262d3a;--border2:#333b4d;
-  --accent:#57a5ff;--accent2:#f4794b;--accent3:#37c978;
-  --day:#eab048;--night:#8f96e8;--manual:#37c978;
-  --warn:#eab048;--danger:#f0564f;
-  --text:#e8ebf3;--text2:#9aa3b8;--text3:#626b80;
+  /* "Crisp" palette: deeper bg with visibly lighter, well-separated surfaces (cards lift off the
+     background instead of blending in) + brighter text and more luminous accents. */
+  --bg:#0d1117;--bg2:#1a212e;--bg3:#222b3b;--bg4:#2d3849;--bg5:#3a475e;
+  --border:#2f3a4c;--border2:#44536e;
+  --accent:#4fa3ff;--accent2:#ff7d47;--accent3:#2ed37e;
+  --day:#f4b73e;--night:#9aa0f5;--manual:#2ed37e;
+  --warn:#f6b838;--danger:#ff5b52;
+  --text:#f1f4fb;--text2:#c0cadd;--text3:#7a8598;
   --on-accent:#000;
-  --backdrop:rgb(8 10 14/.72);--backdrop2:rgb(8 10 14/.6);
+  --backdrop:rgb(5 7 11/.74);--backdrop2:rgb(5 7 11/.62);
   --font:'Inter',system-ui,-apple-system,sans-serif;--mono:'IBM Plex Mono',monospace;
   --r:8px;--r2:12px;
   --shadow-1:0 1px 2px rgb(0 0 0/.35);--shadow-2:0 4px 12px rgb(0 0 0/.35);--shadow-3:0 16px 48px rgb(0 0 0/.5);
@@ -20,8 +22,8 @@
 @media (prefers-color-scheme: light){
   :root{
     color-scheme:light;
-    --bg:#eff1f5;--bg2:#ffffff;--bg3:#f8f9fb;--bg4:#eceef4;--bg5:#e2e6ee;
-    --border:#e2e5ec;--border2:#c9cfda;
+    --bg:#e7eaf1;--bg2:#ffffff;--bg3:#f7f9fc;--bg4:#eceef4;--bg5:#dfe3ec;
+    --border:#dfe3ea;--border2:#c6cdda;
     --accent:#2c6fd6;--accent2:#d96436;--accent3:#1d9e5f;
     --day:#a8751a;--night:#5a63c9;--manual:#1d9e5f;
     --warn:#a8751a;--danger:#d43a33;

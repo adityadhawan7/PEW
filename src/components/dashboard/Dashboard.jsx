@@ -50,6 +50,16 @@ const WageRegisterView=lazyWithReload(()=>import('../WageRegisterView.jsx'));
 export default function Dashboard({currentUser,onLogout}) {
   const [machines,setMachines]=useState(initMachines);
   const [machinesLoaded,setMachinesLoaded]=useState(false);
+  // Gate the machines auto-writer (below) on having a CONFIRMED server value — a real array from
+  // the initial read, or any live snapshot, or (true first run) an authoritative "doc absent" from
+  // the subscription. Until then `machines` is only the seed placeholder from useState(initMachines),
+  // and must NEVER be written back: a transient read failure returns null (fb.get swallows errors),
+  // which previously seeded the defaults and the debounced writer then overwrote the real doc in
+  // Firestore — silently deleting machines the owner had added. The ref mirrors the flag for the
+  // subscription/first-run closures, which capture it once at mount.
+  const [machinesConfirmed,setMachinesConfirmed]=useState(false);
+  const machinesConfirmedRef=useRef(false);
+  const confirmMachines=v=>{ setMachines(v); if(!machinesConfirmedRef.current){ machinesConfirmedRef.current=true; setMachinesConfirmed(true); } };
   const [viewShift,setViewShift]=useState(currentUser.shift||'day');
   const [filterMode,setFilterMode]=useState('all');
   const [selectedMachine,setSelectedMachine]=useState(null);
@@ -100,7 +110,7 @@ export default function Dashboard({currentUser,onLogout}) {
 
   useEffect(()=>{
     Promise.all([
-      fb.get('machines').then(v=>v||initMachines()),
+      fb.get('machines'),   // raw: real array if the doc exists, null on missing OR read error — see confirmMachines
       fb.get('alerts').then(v=>v||[]),
       fb.get('casting_types').then(v=>normalizeCastingTypes(v||DEFAULT_CASTING_TYPES)),
       fb.get('wip').then(v=>v||{}),
@@ -115,9 +125,19 @@ export default function Dashboard({currentUser,onLogout}) {
       fb.get('assembly_models').then(v=>v||[]),
       fb.get('purchased_components').then(v=>v||[]),
     ]).then(([m,a,ct,w,sl,at,wl,adj,ord,ms,ml,il,am,pc])=>{
-      setMachines(m); setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setWageLog(wl); setAdjustments(adj); setOrders(ord); setMaintSchedules(ms); setMaintLog(ml); setInspectionLog(il); setAssemblyModels(am); setPurchasedComponents(pc); setMachinesLoaded(true);
+      // Only adopt+confirm machines when the read returned a real array (existing doc). A null here
+      // means missing OR a swallowed read error — indistinguishable — so we leave the seed placeholder
+      // showing and wait for the live subscription to deliver the authoritative value (or, on a true
+      // first run, to report the doc absent and seed it). The auto-writer stays off until then.
+      if(Array.isArray(m)) confirmMachines(m);
+      setAlerts(a); setCastingTypes(ct); setWip(w); setStockLog(sl); setAttendance(at); setWageLog(wl); setAdjustments(adj); setOrders(ord); setMaintSchedules(ms); setMaintLog(ml); setInspectionLog(il); setAssemblyModels(am); setPurchasedComponents(pc); setMachinesLoaded(true);
     });
-    const unM=fb.sub('machines',v=>{if(v)setMachines(v);});
+    const unM=fb.sub('machines',v=>{
+      if(Array.isArray(v)) confirmMachines(v);                 // authoritative server snapshot
+      else if(v===null&&!machinesConfirmedRef.current){        // snapshot says the doc truly doesn't exist → genuine first run
+        const seed=initMachines(); confirmMachines(seed); fb.set('machines',seed);
+      }
+    });
     const unA=fb.sub('alerts',v=>{if(v)setAlerts(v);});
     const unCt=fb.sub('casting_types',v=>{if(v)setCastingTypes(normalizeCastingTypes(v));});
     const unW=fb.sub('wip',v=>{if(v)setWip(v);});
@@ -142,10 +162,12 @@ export default function Dashboard({currentUser,onLogout}) {
   },[]);
 
   useEffect(()=>{
-    if(!machinesLoaded) return;
+    // Debounced persistence of machine state. Gated on machinesConfirmed (NOT just loaded): never
+    // write back the seed placeholder from a failed/missing initial read — that was the data-loss bug.
+    if(!machinesConfirmed) return;
     const t=setTimeout(()=>fb.set('machines',machines),600);
     return()=>clearTimeout(t);
-  },[machines,machinesLoaded]);
+  },[machines,machinesConfirmed]);
 
   useEffect(()=>{
     const info={username:currentUser.username,name:currentUser.name,role:currentUser.role,shift:viewShift};
@@ -440,7 +462,10 @@ export default function Dashboard({currentUser,onLogout}) {
   const selectedM=rawSelectedM?withShift(rawSelectedM,viewShift):null;
   const overviewCounts={day:5,night:5,manual:machines.filter(m=>m.shift==='manual').length};
 
-  if(!machinesLoaded) return <div className="loading-spin">Loading FactoryOS…<div className="loading-hint">Connecting to Firebase. If this takes more than a few seconds, ensure Firestore rules allow read/write.</div></div>;
+  // Wait for CONFIRMED machine data (not just a finished load attempt) before rendering — so a
+  // failed/offline initial read shows "Loading…" rather than the seed placeholder grid the user
+  // could act on. The live subscription flips machinesConfirmed as soon as Firebase is reachable.
+  if(!machinesLoaded||!machinesConfirmed) return <div className="loading-spin">Loading FactoryOS…<div className="loading-hint">Connecting to Firebase. If this takes more than a few seconds, ensure Firestore rules allow read/write.</div></div>;
 
   return (
     <div className="dashboard">

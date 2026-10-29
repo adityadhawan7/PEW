@@ -170,6 +170,9 @@ body{background:var(--bg)}
 .fbtn.active{background:var(--bg5);color:var(--text)}
 .machine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:12px}
 @media(max-width:600px){.machine-grid{grid-template-columns:1fr;gap:10px}}
+/* Floor is split into one section per machine type (CNCs together, VMCs below, etc.). */
+.m-group+.m-group{margin-top:16px}
+.m-group-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text3);margin-bottom:9px}
 /* Machine card: status drives --st (strip, chip, bar, tinted action). Worded status + plain labels
    + the next action on the card. Tapping the card body opens the detail panel; the action button is
    a one-tap shortcut (it stops propagation so it doesn't also toggle selection). */

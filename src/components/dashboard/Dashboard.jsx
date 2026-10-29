@@ -558,6 +558,7 @@ export default function Dashboard({currentUser,onLogout}) {
             viewShift={viewShift} filterMode={filterMode} setFilterMode={setFilterMode}
             filtered={filtered} castingTypes={castingTypes} assemblyModels={assemblyModels}
             selectedMachine={selectedMachine} setSelectedMachine={setSelectedMachine}
+            isAdmin={isAdmin} setShowAssign={setShowAssign} setLogProgressData={setLogProgressData} setRepairData={setRepairData}
           />
 
           <OutputChart running={running} maxTarget={maxTarget}/>

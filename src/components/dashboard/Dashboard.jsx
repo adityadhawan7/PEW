@@ -94,6 +94,7 @@ export default function Dashboard({currentUser,onLogout}) {
   const [showMachines,setShowMachines]=useState(false);
   const [showProd,setShowProd]=useState(false);
   const [showAssign,setShowAssign]=useState(false);
+  const [assignPrefill,setAssignPrefill]=useState(null); // {machineId, shift} when Assign opened from a floor card
   const [showOnline,setShowOnline]=useState(false);
   const [showDownload,setShowDownload]=useState(false);
   const [showBreakdownHistory,setShowBreakdownHistory]=useState(false);
@@ -475,7 +476,7 @@ export default function Dashboard({currentUser,onLogout}) {
       {showUser&&<UserModal currentUser={currentUser} onClose={()=>setShowUser(false)}/>}
       {showMachines&&<MachinesModal machines={machines} setMachines={setMachines} onClose={()=>setShowMachines(false)}/>}
       {showProd&&<CastingTypesModal castingTypes={castingTypes} setCastingTypes={setCastingTypes} onClose={()=>setShowProd(false)}/>}
-      {showAssign&&<AssignModal machines={machines} setMachines={setMachines} castingTypes={castingTypes} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} wip={wip} onClose={()=>setShowAssign(false)}/>}
+      {showAssign&&<AssignModal machines={machines} setMachines={setMachines} castingTypes={castingTypes} assemblyModels={assemblyModels} purchasedComponents={purchasedComponents} wip={wip} initialMachineId={assignPrefill?.machineId||''} initialShift={assignPrefill?.shift||'day'} onClose={()=>{setShowAssign(false);setAssignPrefill(null);}}/>}
       {showAssemblyModels&&<AssemblyModelsModal assemblyModels={assemblyModels} writeAssemblyModels={writeAssemblyModels} castingTypes={castingTypes} purchasedComponents={purchasedComponents} wip={wip} onClose={()=>setShowAssemblyModels(false)}/>}
       {showPurchasedComponents&&<PurchasedComponentsModal purchasedComponents={purchasedComponents} writePurchasedComponents={writePurchasedComponents} onClose={()=>setShowPurchasedComponents(false)}/>}
       {showOnline&&<OnlineModal sessions={sessions} sid={sid.current} onClose={()=>setShowOnline(false)}/>}
@@ -558,7 +559,7 @@ export default function Dashboard({currentUser,onLogout}) {
             viewShift={viewShift} filterMode={filterMode} setFilterMode={setFilterMode}
             filtered={filtered} castingTypes={castingTypes} assemblyModels={assemblyModels}
             selectedMachine={selectedMachine} setSelectedMachine={setSelectedMachine}
-            isAdmin={isAdmin} setShowAssign={setShowAssign} setLogProgressData={setLogProgressData} setRepairData={setRepairData}
+            isAdmin={isAdmin} setShowAssign={setShowAssign} setAssignPrefill={setAssignPrefill} setLogProgressData={setLogProgressData} setRepairData={setRepairData}
           />
 
           <OutputChart running={running} maxTarget={maxTarget}/>

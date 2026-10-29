@@ -4,10 +4,11 @@ import { fb } from '../firebase.js';
 import { BADGE } from '../constants.js';
 import { withShift, routeNodeIds, getWip, patchMachineShift, resolveJob, bomLineAvailable, maxBuildable, isActiveEmployee, todayStr } from '../utils.js';
 
-export default function AssignModal({machines,setMachines,castingTypes,assemblyModels,purchasedComponents,wip,onClose}) {
+export default function AssignModal({machines,setMachines,castingTypes,assemblyModels,purchasedComponents,wip,onClose,initialMachineId='',initialShift='day'}) {
   const [users,setUsers]=useState([]);
   useEffect(()=>{ fb.listUserProfiles().then(setUsers); },[]);
-  const [selM,setSelM]=useState('');
+  // initialMachineId/initialShift pre-select the machine when opened from a floor card's "Assign job".
+  const [selM,setSelM]=useState(initialMachineId||'');
   const [selOp,setSelOp]=useState('');
   const [jobKind,setJobKind]=useState('assembly'); // only relevant when the selected machine's type is 'assembly'
   const [selCt,setSelCt]=useState('');
@@ -16,7 +17,7 @@ export default function AssignModal({machines,setMachines,castingTypes,assemblyM
   const [selAssemblyId,setSelAssemblyId]=useState('');
   const [needsSetup,setNeedsSetup]=useState(false);
   const [setupHours,setSetupHours]=useState(2);
-  const [selShift,setSelShift]=useState('day');
+  const [selShift,setSelShift]=useState(initialShift==='night'?'night':'day');
   const [msg,setMsg]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const operators=users.filter(u=>u.role==='operator'&&isActiveEmployee(u,todayStr()));
@@ -42,6 +43,14 @@ export default function AssignModal({machines,setMachines,castingTypes,assemblyM
   useEffect(()=>{setSelCt('');setSelRouteId('');setSelNodeId('');setSelAssemblyId('');setNeedsSetup(false);setSetupHours(2);setJobKind('assembly');},[selM,selShift]);
   useEffect(()=>{setSelRouteId('');setSelNodeId('');setNeedsSetup(false);setSetupHours(2);},[selCt]);
   useEffect(()=>{setSelNodeId('');setNeedsSetup(false);setSetupHours(2);},[selRouteId]);
+
+  // Auto-advance any level of the casting chain (type → route → step) that has exactly one eligible
+  // option — there's nothing to choose, so don't make the user click through it. Each fires after
+  // the reset effects above clear the level, so changing the machine re-evaluates the whole chain.
+  useEffect(()=>{ if(effectiveJobKind==='casting'&&selM&&!selCt&&eligibleCastingTypes.length===1) setSelCt(String(eligibleCastingTypes[0].id)); },[selM,selCt,effectiveJobKind,eligibleCastingTypes.length]);
+  useEffect(()=>{ if(selCt&&!selRouteId&&eligibleRoutes.length===1) setSelRouteId(String(eligibleRoutes[0].routeId)); },[selCt,selRouteId,eligibleRoutes.length]);
+  useEffect(()=>{ if(selRouteId&&!selNodeId&&eligibleNodes.length===1) setSelNodeId(String(eligibleNodes[0].nodeId)); },[selRouteId,selNodeId,eligibleNodes.length]);
+  useEffect(()=>{ if(effectiveJobKind==='assembly'&&selM&&!selAssemblyId&&(assemblyModels||[]).length===1) setSelAssemblyId(String(assemblyModels[0].id)); },[selM,selAssemblyId,effectiveJobKind,assemblyModels]);
 
   // Finds which step (and, for floating steps, whether the node sits in a floating group) the
   // selected node belongs to in this route — needed to work out where its input comes from.

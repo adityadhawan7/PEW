@@ -12,7 +12,7 @@ const TYPE_ORDER = ['cnc','vmc'];
 export default function MachineGrid({
   viewShift, filterMode, setFilterMode, filtered, castingTypes, assemblyModels,
   selectedMachine, setSelectedMachine, isAdmin,
-  setShowAssign, setLogProgressData, setRepairData,
+  setShowAssign, setAssignPrefill, setLogProgressData, setRepairData,
 }) {
   const renderCard = m => {
     const job=resolveJob(castingTypes,assemblyModels,m);
@@ -31,7 +31,7 @@ export default function MachineGrid({
     // One primary next-action per state, right on the card. The card body still opens the full
     // detail/action panel; this button is the one-tap shortcut for the common case.
     let action;
-    if(status==='idle') action={label:'Assign job',cls:'solid',onClick:stop(()=>setShowAssign(true))};
+    if(status==='idle') action={label:'Assign job',cls:'solid',onClick:stop(()=>{setAssignPrefill({machineId:m.id,shift:m.shift==='manual'?'day':viewShift});setShowAssign(true);})};
     else if(status==='breakdown'&&isAdmin) action={label:'Mark repaired',cls:'',onClick:stop(()=>setRepairData({machine:m,shiftKey}))};
     else if(status==='running') action={label:'Log progress',cls:'',onClick:stop(()=>setLogProgressData({machine:m,pj:effectiveStage,shiftKey,mode:isAssembly?'assembly':'casting'}))};
     else if(status==='behind') action={label:'Review shortfall',cls:'',onClick:stop(()=>document.querySelector('#floor-alerts')?.scrollIntoView({behavior:'smooth',block:'start'}))};

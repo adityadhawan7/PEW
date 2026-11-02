@@ -18,6 +18,7 @@ export default function OutputChart({ running, maxTarget }) {
               </div>
             );
           })}
+          <div className="ob-legend"><span className="mark"></span> marker = each machine's full-shift target</div>
         </div>
       )}
     </div>

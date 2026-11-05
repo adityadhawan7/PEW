@@ -1,5 +1,5 @@
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, onSnapshot, collection, getDocs, query, where, limit } from 'firebase/firestore';
 import {
   getAuth, setPersistence, browserSessionPersistence, browserLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
@@ -15,7 +15,18 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// Offline persistence: cache Firestore data in IndexedDB so the app keeps working through brief
+// shop-floor connection dropouts — reads come from cache instead of failing, and writes queue in
+// IndexedDB and sync on reconnect (surviving a tab close). persistentMultipleTabManager lets the
+// several tabs a terminal may have share one cache. If IndexedDB is unavailable (private window,
+// unsupported browser) the SDK falls back to in-memory automatically — it does not throw.
+// Must use initializeFirestore (not getFirestore) and run before any other Firestore call.
+// NOTE: a cached read means fb.get can now return real data offline, which only strengthens the
+// machinesConfirmed data-loss guard in Dashboard (a transient failure no longer looks like an
+// empty DB). Keep that guard regardless — cache can still be empty on a cold first load offline.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 const COL = 'factoryos';
 
 const auth = getAuth(app);

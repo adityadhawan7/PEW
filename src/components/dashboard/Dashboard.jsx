@@ -3,7 +3,7 @@ import { fb } from '../../firebase.js';
 import { toast } from '../../toast.js';
 import { confirmDialog } from '../../confirmDialog.js';
 import { SHIFT_CFG, DEFAULT_CASTING_TYPES } from '../../constants.js';
-import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary } from '../../utils.js';
+import { nowStr, todayStr, fullTs, normalizeCastingTypes, calcOtPay, computeShiftCompletionUpdate, computeAssemblyShiftUpdate, withShift, patchMachineShift, initMachines, attentionSummary, defaultSlot } from '../../utils.js';
 
 import OperatorHome from './OperatorHome.jsx';
 import AssignModal from '../AssignModal.jsx';
@@ -325,12 +325,7 @@ export default function Dashboard({currentUser,onLogout}) {
       setWip(result.updatedWip); fb.set('wip',result.updatedWip);
       const updatedLog=[...result.logEntries,...stockLog].slice(0,500);
       setStockLog(updatedLog); fb.set('stock_log',updatedLog);
-      const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects:0});
-      setMachines(updated); fb.set('machines',updated);
     } else {
-      const updated=patchMachineShift(machines,m.id,shiftKey,{shiftComplete:true,prodCount:total,newPieces,reworkPieces,castingDefects,machiningDefects});
-      setMachines(updated); fb.set('machines',updated);
-
       const ct=castingTypes.find(c=>Number(c.id)===Number(m.castingTypeId));
       const route=ct&&m.routeId?ct.routes.find(r=>Number(r.routeId)===Number(m.routeId)):null;
       const nodeId=m.nodeId;
@@ -395,6 +390,12 @@ export default function Dashboard({currentUser,onLogout}) {
       };
       writeWageLog([entry,...wageLog].slice(0,2000));
     }
+    // Shift done \u2192 free the machine: back to idle with the operator and job cleared, ready for the
+    // next assignment. The produced output is already recorded in wage_log / stock_log / analytics
+    // above (all read from the captured job above, not the machine), so the machine itself no longer
+    // needs to carry the finished shift. Done last so a mid-way safety bail leaves it assigned.
+    const freed=patchMachineShift(machines,m.id,shiftKey,defaultSlot());
+    setMachines(freed); await fb.set('machines',freed);
     toast(`\u2713 ${m.name}: shift complete \u2014 ${total} units logged`);
     setShiftCompleteData(null);
   };

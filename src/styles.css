@@ -252,8 +252,6 @@ body{background:var(--bg)}
 .md-btn:hover{color:var(--text);border-color:var(--border2);background:var(--bg5)}
 .md-btn.primary{background:var(--accent3);color:var(--on-accent);border-color:transparent}
 .md-btn.danger{background:color-mix(in srgb, var(--danger) 8%, transparent);color:var(--danger);border-color:color-mix(in srgb, var(--danger) 15%, transparent)}
-.pill{font-size:11px;padding:2px 8px;border-radius:999px;font-family:var(--font);font-weight:500}
-.p-run{background:color-mix(in srgb, var(--accent3) 13%, transparent);color:var(--accent3)}.p-idle{background:color-mix(in srgb, var(--warn) 13%, transparent);color:var(--warn)}.p-down{background:color-mix(in srgb, var(--danger) 13%, transparent);color:var(--danger)}
 .prod-entry{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:.875rem;margin-top:.75rem;box-shadow:var(--shadow-1)}
 .prod-entry-title{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);font-family:var(--font);font-weight:600;margin-bottom:.625rem}
 .prod-vs{font-size:12px;font-family:var(--mono);color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between}

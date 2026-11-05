@@ -2,6 +2,10 @@ import { SHIFT_CFG } from '../../constants.js';
 import { operatorAssignments, resolveJob } from '../../utils.js';
 import ProductionActions from './ProductionActions.jsx';
 
+// Same worded status + colours as the floor cards / detail panel, so every surface reads alike.
+const STATUS_LABEL = { running:'Running', idle:'Idle', breakdown:'Breakdown', done:'Done ✓', behind:'Behind' };
+const STATUS_COLOR = { running:'var(--accent3)', done:'var(--accent3)', idle:'var(--text3)', behind:'var(--warn)', breakdown:'var(--danger)' };
+
 // ── Operator home ("My shift") ─────────────────────────────
 // The operator's default landing view: one card per assignment slot across ALL shifts (a cnc
 // machine assigned to the operator on both day and night yields two cards, each acting on its
@@ -41,11 +45,13 @@ export default function OperatorHome({
             :job.kind==='assembly'?job.model.target:null;
           const pct=target?Math.min(100,Math.round(m.prodCount/target*100)):0;
           const isDown=m.status==='breakdown';
+          const met=target!=null&&m.prodCount>=target;
+          const status=isDown?'breakdown':job.kind===null?'idle':m.shiftComplete?(met?'done':'behind'):'running';
           return (
             <div className="op-card" key={`${m.id}:${shiftKey}`}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                 <div style={{fontFamily:'var(--mono)',fontSize:12,fontWeight:600}}>{m.id} · {m.name}</div>
-                <span className={`pill${m.status==='running'?' p-run':m.status==='idle'?' p-idle':' p-down'}`}>{m.status.charAt(0).toUpperCase()+m.status.slice(1)}</span>
+                <span className="m-chip" style={{'--st':STATUS_COLOR[status]}}><span className="d"></span>{STATUS_LABEL[status]}</span>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,marginTop:6}}>
                 <span className="op-card-chip" style={{color:cfg.color,borderColor:cfg.color}}>{shiftKey==='manual'?'Manual':shiftKey==='night'?'Night':'Day'}</span>

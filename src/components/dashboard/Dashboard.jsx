@@ -395,7 +395,10 @@ export default function Dashboard({currentUser,onLogout}) {
     // above (all read from the captured job above, not the machine), so the machine itself no longer
     // needs to carry the finished shift. Done last so a mid-way safety bail leaves it assigned.
     const freed=patchMachineShift(machines,m.id,shiftKey,defaultSlot());
-    setMachines(freed); await fb.set('machines',freed);
+    // Fire-and-forget like every other write in this handler: local state updates immediately so the
+    // home frees right away. NEVER await this \u2014 with offline persistence an offline write's promise
+    // doesn't resolve until reconnect, which would hang the handler and leave the modal stuck open.
+    setMachines(freed); fb.set('machines',freed);
     toast(`\u2713 ${m.name}: shift complete \u2014 ${total} units logged`);
     setShiftCompleteData(null);
   };

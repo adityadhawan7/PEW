@@ -129,13 +129,20 @@ export default function AssignModal({machines,setMachines,castingTypes,assemblyM
       setSubmitting(false);
     }
   };
-  const clear=async mid=>{
-    const updated=patchMachineShift(machines,mid,selShift,{assignedOperator:null});
-    setMachines(updated); await fb.set('machines',updated);
+  const clear=(mid,sk)=>{
+    const updated=patchMachineShift(machines,mid,sk,{assignedOperator:null});
+    setMachines(updated); fb.set('machines',updated);
   };
-  const active=allAssignable.filter(m=>m.assignedOperator);
+  // Every current assignment across BOTH cnc/vmc shifts + manual — so the list never hides a job just
+  // because the form's shift toggle is on the other shift (e.g. a night VMC job while viewing Day).
+  const assignedSlots=[];
+  machines.forEach(m=>{
+    if(m.shift==='cnc_vmc'){
+      for(const sk of ['day','night']){ const slot=withShift(m,sk); if(slot.assignedOperator) assignedSlots.push({machine:slot,shiftKey:sk}); }
+    } else if(m.assignedOperator){ assignedSlots.push({machine:m,shiftKey:'manual'}); }
+  });
   const opAssignmentCounts={};
-  active.forEach(m=>{ opAssignmentCounts[m.assignedOperator]=(opAssignmentCounts[m.assignedOperator]||0)+1; });
+  assignedSlots.forEach(({machine})=>{ opAssignmentCounts[machine.assignedOperator]=(opAssignmentCounts[machine.assignedOperator]||0)+1; });
 
   return (
     <Modal onClose={onClose} title="Assign jobs" wide>
@@ -265,26 +272,27 @@ export default function AssignModal({machines,setMachines,castingTypes,assemblyM
       {msg&&<div className="save-msg" style={{color:msg.includes('Select')||msg.includes('rate')?'var(--danger)':'var(--accent3)'}}>{msg}</div>}
       <button className="add-btn" onClick={assign} disabled={submitting} style={{opacity:submitting?0.6:1}}>{submitting?'ASSIGNING…':'ASSIGN →'}</button>
 
-      {active.length>0&&(
+      {assignedSlots.length>0&&(
         <>
-          <div className="sb-title" style={{marginTop:'1.25rem'}}>Current assignments — {selShift==='day'?'Day shift':'Night shift'}</div>
+          <div className="sb-title" style={{marginTop:'1.25rem'}}>Current assignments (all shifts)</div>
           {Object.entries(
-            active.reduce((acc,m)=>{ (acc[m.assignedOperator]=acc[m.assignedOperator]||[]).push(m); return acc; },{})
-          ).map(([opUsername,opMachines])=>(
+            assignedSlots.reduce((acc,e)=>{ (acc[e.machine.assignedOperator]=acc[e.machine.assignedOperator]||[]).push(e); return acc; },{})
+          ).map(([opUsername,entries])=>(
             <div key={opUsername} style={{marginBottom:8}}>
-              <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',marginBottom:4}}>{opMachines[0].operator}{opMachines.length>1?` (${opMachines.length} machines)`:''}</div>
-              {opMachines.map(m=>{
+              <div style={{fontSize:10,fontFamily:'var(--mono)',color:'var(--text2)',marginBottom:4}}>{entries[0].machine.operator}{entries.length>1?` (${entries.length} machines)`:''}</div>
+              {entries.map(({machine:m,shiftKey:sk})=>{
                 const job=resolveJob(castingTypes,assemblyModels,m);
                 const label=job.kind==='assembly'?job.model.name
                   :job.kind==='casting'?`${job.ct.name} — ${job.route?job.route.name:'—'} (${job.stage.name})`
                   :'—';
+                const shiftTag=sk==='manual'?'Manual':sk==='night'?'Night':'Day';
                 return (
-                  <div className="pj-row" key={m.id} style={{marginBottom:4}}>
+                  <div className="pj-row" key={`${m.id}:${sk}`} style={{marginBottom:4}}>
                     <div className="pj-info">
-                      <div className="pj-name">{m.id}{m.setupApplied?' · setup applied':''}</div>
+                      <div className="pj-name">{m.id} · {shiftTag}{m.setupApplied?' · setup applied':''}</div>
                       <div className="pj-meta">{label}{m.setupApplied?` · target ${m.adjustedTarget}`:''}</div>
                     </div>
-                    <button className="small-btn danger" onClick={()=>clear(m.id)}>Clear</button>
+                    <button className="small-btn danger" onClick={()=>clear(m.id,sk)}>Clear</button>
                   </div>
                 );
               })}
